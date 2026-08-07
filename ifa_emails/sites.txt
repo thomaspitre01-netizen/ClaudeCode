@@ -1,0 +1,12 @@
+# Singapore IFA / FA firm websites, one per line.
+# Only firms already represented in your database - add more as you meet them.
+https://www.finexis.com.sg
+https://www.ippfa.com
+https://www.gyc.com.sg
+https://www.promiseland.com.sg
+https://www.aam-advisory.com
+https://www.nebaprivateclients.com
+https://www.singaporeexpatadvisory.com
+https://www.proinvest.com.sg
+https://www.financialalliance.com.sg
+https://synergyfa.com

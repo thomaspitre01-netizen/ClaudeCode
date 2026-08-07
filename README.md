@@ -10,6 +10,7 @@ rebuilt from the original `IFA_Meeting_List.xlsx`.
 | `IFA_Contacts_Dashboard.xlsx` | The workbook. Formula-driven — no macros needed. |
 | `IFA_Contacts_Macros.bas` | Optional VBA module (add contact, sort, extend capacity, find duplicates). |
 | `build/` | The Python that generated the workbook, so it can be rebuilt from the source file. |
+| `ifa_emails/` | Toolkit that fills in missing email addresses and crawls firm sites. See its own README. |
 
 ## Tabs
 
@@ -33,6 +34,21 @@ Open **RawData**, go to the first empty row, type into columns B–S. Everything
 
 Open **Setup**, fill a free row of the EVENTS table (name / short name / date). A new status
 column appears in RawData and a new line appears on the Dashboard's event table.
+
+## Finding missing email addresses
+
+116 of the 369 contacts have no address. `ifa_emails/` learns each firm's house email
+format from the 253 you already hold and fills the gaps, with a measured confidence
+per row:
+
+```bash
+python -m ifa_emails patterns            # what format each firm uses, and how accurate
+python -m ifa_emails predict --validate  # fill the blanks + MX check
+python -m ifa_emails export              # CSV shaped like RawData
+```
+
+Read `ifa_emails/README.md` first — it explains where the tool refuses to guess, and
+what to settle with compliance before sending.
 
 ## Rebuilding from source
 
