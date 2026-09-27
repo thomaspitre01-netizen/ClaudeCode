@@ -373,18 +373,22 @@ class LeadsTests(unittest.TestCase):
     def assess(self, **kw):
         from japan_re import leads
         r = self.row(**kw)
-        area, tier = leads.locate(r, {})
-        return leads.assess(r, area, tier, {'Suginami': 400_000}, None, leads._text(r))
+        area, tier, station = leads.locate(r, {'高円寺': 8})
+        return leads.assess(r, area, tier, {'Suginami': 400_000}, None, leads._text(r), station)
 
     def test_locate(self):
         from japan_re import leads
-        self.assertEqual(leads.locate(self.row(), {}), ('Koenji', 'primary'))
-        other = self.row(neighborhood_ja='桃井', address_ja='')
-        self.assertEqual(leads.locate(other, {'高円寺': 12}), ('Koenji', 'primary'))
-        self.assertEqual(leads.locate(other, {'高円寺': 25}), (None, None))
-        self.assertEqual(leads.locate(other, {'西荻窪': 5}), ('Nishi-Ogikubo', 'secondary'))
-        self.assertEqual(leads.locate(self.row(municipality='Kamakura', neighborhood_ja='山ノ内', address_ja='鎌倉市山ノ内'), {}),
-                         ('Kita-Kamakura', 'primary'))
+        r = self.row(lat=None, lng=None)
+        self.assertEqual(leads.locate(r, {'高円寺': 12})[:2], ('Koenji', 'primary'))
+        self.assertEqual(leads.locate(r, {'高円寺': 31}), (None, None, None))      # 30-min hard limit
+        self.assertEqual(leads.locate(r, {'西荻窪': 5, '吉祥寺': 25})[:2], ('Kichijoji', 'primary'))
+        self.assertEqual(leads.locate(r, {'西荻窪': 5})[:2], ('Nishi-Ogikubo', 'secondary'))
+        self.assertEqual(leads.locate(r, {'浜田山': 5}), (None, None, None))
+        # listing names only an Enoden stop, but the pin is ~1 km from Kamakura station
+        near = self.row(lat=35.3120, lng=139.5420)
+        area, tier, how = leads.locate(near, {'長谷': 5})
+        self.assertEqual((area, tier), ('Kamakura', 'primary'))
+        self.assertIn('estimated from the map', how)
 
     def test_old_house_with_land_beats_new_flat(self):
         house = self.assess()
@@ -392,7 +396,7 @@ class LeadsTests(unittest.TestCase):
         self.assertIn('Renovation Opportunities', house.categories)
         self.assertIn('Price Opportunities', house.categories)       # ¥173k/m² vs ¥400k median
         self.assertEqual(house.indicators['Price'][1], 'sweet spot ¥30-50M')
-        self.assertIn('260 m² of land in Koenji, built 1972, needs major renovation, 8 min from Koenji',
+        self.assertIn('260 m² of land in Koenji, built 1972, needs major renovation, 8 min walk from Koenji',
                       house.reason)
         flat = self.assess(property_type='condominium', year_built=2018, condition='move_in_ready',
                            land_area_m2=None, price_per_m2_land=None)

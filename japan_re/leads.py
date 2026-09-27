@@ -5,6 +5,7 @@ Thomas's criteria (brief section 19, 27 Sep 2026), in short:
     interesting, and always flagged as above the ideal budget;
   * land + ownership + character + age + location + renovation potential, never
     newness or luxury: needing ¥30-50M of work is not a penalty;
+  * at most a 30-minute walk from the main station of a target area (added 27 Sep);
   * Kichijoji, Nakano, Koenji, Kamakura, Kita-Kamakura first; Mitaka, Nishi-Ogikubo,
     Asagaya, Ogikubo, Higashi-/Shin-Nakano, the streets around Koenji, Zushi and Hayama
     second.
@@ -24,28 +25,28 @@ from .normalize import nfkc
 HARD_MAX = 70_000_000
 IDEAL_MAX = 50_000_000
 SWEET_MIN = 30_000_000
-WALK_MAX = 15            # minutes on foot for a station to count
+WALK_MAX = 30            # hard limit: minutes on foot from one of the main stations below
 
-# Areas, matched on station (Japanese name, ≤ WALK_MAX), neighbourhood or municipality.
-PRIMARY = {
-    'Kichijoji':    dict(stations=('吉祥寺', '井の頭公園'), hoods=('吉祥寺', '御殿山'), munis=()),
-    'Nakano':       dict(stations=('中野',), hoods=(), munis=('Nakano',)),
-    'Koenji':       dict(stations=('高円寺',), hoods=('高円寺',), munis=()),
-    'Kita-Kamakura': dict(stations=('北鎌倉',), hoods=('山ノ内',), munis=()),
-    'Kamakura':     dict(stations=(), hoods=(), munis=('Kamakura',)),
-}
-SECONDARY = {
-    'Mitaka':        dict(stations=('三鷹', '三鷹台'), hoods=(), munis=('Mitaka',)),
-    'Nishi-Ogikubo': dict(stations=('西荻窪',), hoods=('西荻',), munis=()),
-    'Asagaya':       dict(stations=('阿佐ケ谷', '阿佐ヶ谷', '南阿佐ケ谷', '南阿佐ヶ谷'), hoods=('阿佐谷',), munis=()),
-    'Ogikubo':       dict(stations=('荻窪',), hoods=('荻窪',), munis=()),
-    'Higashi-Nakano': dict(stations=('東中野',), hoods=('東中野',), munis=()),
-    'Shin-Nakano':   dict(stations=('新中野', '中野坂上', '中野富士見町', '中野新橋'), hoods=(), munis=()),
-    'Around Koenji': dict(stations=('新高円寺', '東高円寺'), hoods=('梅里', '和田', '松ノ木', '堀ノ内'), munis=()),
-    'Musashino':     dict(stations=(), hoods=(), munis=('Musashino',)),
-    'Zushi':         dict(stations=('逗子', '新逗子', '逗子・葉山', '東逗子'), hoods=(), munis=('Zushi',)),
-    'Hayama':        dict(stations=(), hoods=(), munis=('Hayama',)),
-}
+# The main station of each area. A property is in an area when the listing gives a walk
+# of WALK_MAX minutes or less to that station, or - when the listing names other stations -
+# when its map pin is within a 30-minute walk as the crow flies (80 m/min on the road,
+# ~1.3x longer than a straight line, so 1.85 km).
+STATIONS = [  # (area, tier, station names as listings write them, (lat, lng))
+    ('Kichijoji', 'primary', ('吉祥寺', 'Kichijoji'), (35.7031, 139.5798)),
+    ('Koenji', 'primary', ('高円寺', 'Koenji'), (35.7054, 139.6496)),
+    ('Nakano', 'primary', ('中野', 'Nakano'), (35.7056, 139.6657)),
+    ('Kita-Kamakura', 'primary', ('北鎌倉', 'Kita-Kamakura'), (35.3370, 139.5460)),
+    ('Kamakura', 'primary', ('鎌倉', 'Kamakura'), (35.3190, 139.5505)),
+    ('Mitaka', 'secondary', ('三鷹', 'Mitaka'), (35.7027, 139.5607)),
+    ('Nishi-Ogikubo', 'secondary', ('西荻窪', 'Nishi-Ogikubo'), (35.7038, 139.5993)),
+    ('Ogikubo', 'secondary', ('荻窪', 'Ogikubo'), (35.7047, 139.6200)),
+    ('Asagaya', 'secondary', ('阿佐ケ谷', '阿佐ヶ谷', 'Asagaya'), (35.7050, 139.6359)),
+    ('Higashi-Nakano', 'secondary', ('東中野', 'Higashi-Nakano'), (35.7068, 139.6828)),
+    ('Shin-Nakano', 'secondary', ('新中野', 'Shin-Nakano'), (35.6976, 139.6690)),
+    ('Zushi', 'secondary', ('逗子', 'Zushi'), (35.2957, 139.5795)),
+    ('Zushi', 'secondary', ('逗子・葉山', '新逗子', 'Zushi-Hayama', 'Shin-Zushi'), (35.2944, 139.5840)),
+]
+M_PER_MIN_STRAIGHT = 80 / 1.3
 
 TYPES = ('detached_house', 'traditional_house', 'kominka', 'machiya', 'land', 'entire_building',
          'mixed_use', 'condominium', 'other')
@@ -70,6 +71,7 @@ class Lead:
     row: dict
     area: str | None
     tier: str | None                      # 'primary' | 'secondary'
+    station: str | None = None            # 'Kichijoji, 12 min walk'
     indicators: dict[str, tuple[str, str]] = field(default_factory=dict)   # name -> (dot, text)
     signals: list[str] = field(default_factory=list)
     categories: list[str] = field(default_factory=list)
@@ -97,18 +99,29 @@ def _stations(conn, property_id) -> dict[str, int]:
     return out
 
 
-def locate(r, stations: dict[str, int]) -> tuple[str | None, str | None]:
-    hood = nfkc((r.get('neighborhood_ja') or '') + ' ' + (r.get('address_ja') or ''))
-    for tier, areas in (('primary', PRIMARY), ('secondary', SECONDARY)):
-        # stations and neighbourhoods first: Ofuna is in Kamakura city but is not Kita-Kamakura
-        for area, rule in areas.items():
-            if any(stations.get(nfkc(s), 999) <= WALK_MAX for s in rule['stations']) or \
-                    any(h in hood for h in rule['hoods']):
-                return area, tier
-        for area, rule in areas.items():
-            if r.get('municipality') in rule['munis']:
-                return area, tier
-    return None, None
+def _km(a, b) -> float:
+    import math
+    dy = (a[0] - b[0]) * 111.0
+    dx = (a[1] - b[1]) * 111.0 * math.cos(math.radians(a[0]))
+    return math.hypot(dx, dy)
+
+
+def locate(r, stations: dict[str, int]) -> tuple[str | None, str | None, str | None]:
+    """(area, tier, 'Kichijoji, 12 min walk') for the best main station within WALK_MAX,
+    primary areas before secondary ones, else (None, None, None)."""
+    best = None
+    for area, tier, names, coord in STATIONS:
+        walk = min((stations[nfkc(n)] for n in names if nfkc(n) in stations), default=None)
+        how = 'walk'
+        if walk is None and r.get('lat') and r.get('lng'):
+            walk = round(_km((r['lat'], r['lng']), coord) * 1000 / M_PER_MIN_STRAIGHT)
+            how = 'walk, estimated from the map'
+        if walk is None or walk > WALK_MAX:
+            continue
+        key = (tier != 'primary', walk)
+        if best is None or key < best[0]:
+            best = (key, area, tier, f'{names[-1]}, {walk} min {how}')
+    return (best[1], best[2], best[3]) if best else (None, None, None)
 
 
 # ---------------------------------------------------------------- indicators
@@ -128,8 +141,8 @@ def land_medians(conn) -> dict[str, float]:
     return {m: statistics.median(v) for m, v in per.items() if len(v) >= 5}
 
 
-def assess(r, area, tier, medians, new_since, text) -> Lead:
-    L = Lead(row=r, area=area, tier=tier)
+def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
+    L = Lead(row=r, area=area, tier=tier, station=station)
     ind, sig = L.indicators, L.signals
     price, ptype = r['price_jpy'], r['property_type']
     is_flat = ptype == 'condominium'
@@ -221,7 +234,7 @@ def assess(r, area, tier, medians, new_since, text) -> Lead:
         extras.append('rebuild not permitted (再建築不可)')
     if new_since and r['first_seen'] and r['first_seen'] >= new_since:
         sig.append('new')
-    L.reason = _reason(r, area, extras)
+    L.reason = _reason(r, area, extras, station)
 
     # ----- is it a lead? hard cap and area are checked by the caller
     # 'core' signals are the ones the brief is about; garden/unusual only break ties
@@ -276,7 +289,7 @@ TYPE_EN = {'detached_house': 'House', 'traditional_house': 'Traditional house', 
            'mixed_use': 'Mixed-use building', 'condominium': 'Apartment', 'other': 'Property'}
 
 
-def _reason(r, area, extras) -> str:
+def _reason(r, area, extras, station=None) -> str:
     bits = [f'¥{r["price_jpy"] / 1e6:,.1f}M {TYPE_EN.get(r["property_type"], "property").lower()}']
     if r['land_area_m2'] and r['property_type'] != 'condominium':
         bits.append(f'with {r["land_area_m2"]:,.0f} m² of land')
@@ -287,8 +300,10 @@ def _reason(r, area, extras) -> str:
     if r['condition'] in ('major_renovation', 'full_renovation', 'derelict_rebuild'):
         s += ', ' + {'major_renovation': 'needs major renovation', 'full_renovation': 'needs full renovation',
                      'derelict_rebuild': 'building near end of life'}[r['condition']]
-    if r['station_walk_min'] is not None and r['nearest_station']:
-        s += f', {r["station_walk_min"]} min from {r["nearest_station"].split(" / ")[-1]}'
+    if station:
+        name, walk = station.split(', ', 1)
+        est = ' (est. from the map)' if 'estimated' in walk else ''
+        s += f', {walk.split(" min")[0]} min walk from {name}{est}'
     if extras:
         s += '; ' + '; '.join(extras)
     return s + '.'
@@ -315,13 +330,13 @@ def find(conn, areas: list[str] | None = None, include_secondary: bool = True,
     out = []
     for row in rows:
         r = dict(row)
-        area, tier = locate(r, _stations(conn, r['property_id']))
+        area, tier, station = locate(r, _stations(conn, r['property_id']))
         if not area or (tier == 'secondary' and not include_secondary):
             continue
         if areas and area not in areas:
             continue
         text = _text(r) + ' ' + _listing_text(conn, r['property_id'])
-        L = assess(r, area, tier, medians, new_since, text)
+        L = assess(r, area, tier, medians, new_since, text, station)
         if L.categories:
             out.append(L)
     out.sort(key=lambda L: (not L.is_lead, L.tier != 'primary', -L.weight, L.row['price_jpy']))
@@ -348,9 +363,11 @@ def card(L: Lead) -> list[str]:
         facts.append(f'Building: {r["building_area_m2"]:,.0f} m²')
     if r['year_built']:
         facts.append(f'Built: {r["year_built"]}')
-    if r['nearest_station']:
-        walk = f', {r["station_walk_min"]} min' if r['station_walk_min'] is not None else ''
-        facts.append(f'Station: {r["nearest_station"].split(" / ")[-1]}{walk}')
+    if L.station:
+        facts.append(f'Station: {L.station}')
+    nearest = (r['nearest_station'] or '').split(' / ')[-1]
+    if nearest and r['station_walk_min'] is not None and not (L.station or '').startswith(nearest):
+        facts.append(f'Nearest: {nearest}, {r["station_walk_min"]} min')
     facts.append(f'Condition: {(r["condition"] or "unknown").replace("_", " ")}')
     facts.append(f'Land ownership: {r["land_rights"] or "unknown"}')
     lines.append(' · '.join(facts) + '  ')
@@ -366,7 +383,7 @@ def card(L: Lead) -> list[str]:
 def to_markdown(found: list[Lead]) -> str:
     leads = [L for L in found if L.is_lead]
     out = [f'# Leads · {dt.date.today():%d %b %Y}', '',
-           f'{len(leads)} leads and {len(found) - len(leads)} on the watchlist. Hard cap ¥70M; ¥50M or less '
+           f'{len(leads)} leads and {len(found) - len(leads)} on the watchlist. Hard limits: ¥70M and a 30-minute walk from a main station; ¥50M or less '
            'preferred. Ranked by land, ownership, character, age, location and renovation potential. '
            'Indicator order: Price, Land, Age, Renovation, Location, Traditional character, Freehold '
            '(🟢 good · 🟡 so-so · 🔴 against · ⚪ unknown).', '']
@@ -388,7 +405,7 @@ def to_json(found: list[Lead]) -> list[dict]:
     keys = ('property_id', 'price_jpy', 'property_type', 'municipality', 'land_area_m2', 'building_area_m2',
             'year_built', 'condition', 'land_rights', 'nearest_station', 'station_walk_min', 'lat', 'lng',
             'primary_url', 'sources', 'first_seen', 'title_ja', 'title_en', 'thumbnail_url')
-    return [dict({k: L.row.get(k) for k in keys}, area=L.area, area_tier=L.tier, is_lead=L.is_lead,
+    return [dict({k: L.row.get(k) for k in keys}, area=L.area, area_tier=L.tier, main_station=L.station, is_lead=L.is_lead,
                  categories=L.categories, reason=L.reason, weight=L.weight,
                  indicators={k: {'dot': d, 'text': t} for k, (d, t) in L.indicators.items()})
             for L in found]
