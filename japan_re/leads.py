@@ -313,8 +313,14 @@ def _reason(r, area, extras, station=None) -> str:
 
 # ---------------------------------------------------------------- queries
 
-CATEGORY_ORDER = ('New Leads', 'Renovation Opportunities', 'Land Opportunities', 'Traditional Properties',
+# A lead can fit several categories but is shown once, under the first that fits in
+# this order; the card lists the others as tags.
+CATEGORY_ORDER = ('New Leads', 'Traditional Properties', 'Renovation Opportunities', 'Land Opportunities',
                   'Price Opportunities', 'Unusual / Hidden Opportunities', 'Other Leads', 'Watchlist')
+
+
+def main_category(L: 'Lead') -> str:
+    return next(c for c in CATEGORY_ORDER if c in L.categories)
 
 
 def find(conn, areas: list[str] | None = None, include_secondary: bool = True,
@@ -386,6 +392,9 @@ def card(L: Lead) -> list[str]:
     lines.append(' · '.join(facts) + '  ')
     lines.append(' '.join(f'{name}: {dot}' for name, (dot, _) in L.indicators.items()) + '  ')
     lines.append(f'**Why:** {L.reason}  ')
+    others = [c for c in L.categories if c != main_category(L)]
+    if others:
+        lines.append(f'Also: {", ".join(others)}  ')
     title_ja = r['title_ja'] or ''
     lines.append(f'#{r["property_id"]} · {title_ja} · first seen {(r["first_seen"] or "")[:10]} · '
                  f'[Open listing]({r["primary_url"]}) ({r["sources"]})')
@@ -402,7 +411,7 @@ def to_markdown(found: list[Lead]) -> str:
            'Indicator order: Price, Land, Age, Renovation, Location, Traditional character, Freehold '
            '(🟢 good · 🟡 so-so · 🔴 against · ⚪ unknown).', '']
     for cat in CATEGORY_ORDER:
-        group = [L for L in found if cat in L.categories]
+        group = [L for L in found if main_category(L) == cat]
         if cat == 'New Leads' and not group:
             continue
         if not group:
@@ -421,6 +430,6 @@ def to_json(found: list[Lead]) -> list[dict]:
             'primary_url', 'sources', 'first_seen', 'title_ja', 'title_en', 'thumbnail_url')
     return [dict({k: L.row.get(k) for k in keys}, area=L.area, area_tier=L.tier, main_station=L.station,
                  review=L.review, review_note=L.review_note, is_lead=L.is_lead,
-                 categories=L.categories, reason=L.reason, weight=L.weight,
+                 categories=L.categories, main_category=main_category(L), reason=L.reason, weight=L.weight,
                  indicators={k: {'dot': d, 'text': t} for k, (d, t) in L.indicators.items()})
             for L in found]

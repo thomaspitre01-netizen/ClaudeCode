@@ -16,6 +16,7 @@ from __future__ import annotations
 import itertools
 import json
 import math
+import re
 from collections import defaultdict
 
 from . import db
@@ -83,6 +84,10 @@ def score(a, b) -> tuple[float, list[str]]:
             s += 2; reasons.append(f'{d:.0f} m apart')
         elif d > 500:
             s -= 3; reasons.append(f'{d:.0f} m apart')
+    ta, tb = a['title_ja'] or '', b['title_ja'] or ''
+    if len(ta) >= 6 and ta == tb and a['address_ja'] and a['address_ja'] == b['address_ja']:
+        # R不動産's Tokyo and Kamakura sites publish the same write-up under both
+        s += 4; reasons.append('same headline and address')
     if a['layout_ja'] and a['layout_ja'] == b['layout_ja']:
         s += 0.5; reasons.append(f'same layout {a["layout_ja"]}')
     if not (la and lb) and not (ba and bb):
@@ -91,13 +96,22 @@ def score(a, b) -> tuple[float, list[str]]:
     return s, reasons
 
 
+def _block(r) -> str:
+    """Municipality; for out-of-area listings, the city part of the address."""
+    if r['municipality']:
+        return r['municipality']
+    m = re.match(r'^(.{2,4}?[都道府県])?(.+?[市区町村])', r['address_ja'] or '')
+    return m.group(2) if m else (r['address_ja'] or '')[:6]
+
+
 def run(conn) -> dict:
-    rows = conn.execute('SELECT * FROM listings WHERE municipality IS NOT NULL').fetchall()
+    rows = conn.execute('SELECT * FROM listings WHERE municipality IS NOT NULL OR address_ja IS NOT NULL'
+                        ).fetchall()
     rejected = {(r['listing_a'], r['listing_b']) for r in
                 conn.execute("SELECT listing_a, listing_b FROM dedup_matches WHERE decision = 'rejected'")}
     blocks = defaultdict(list)
     for r in rows:
-        blocks[r['municipality']].append(r)
+        blocks[_block(r)].append(r)
 
     parent: dict[int, int] = {}
 
@@ -158,6 +172,8 @@ def run(conn) -> dict:
                             WHERE id = ?''', (old, old, old, keep))
             conn.execute('INSERT OR IGNORE INTO favorites (property_id, added_at, note) '
                          'SELECT ?, added_at, note FROM favorites WHERE property_id = ?', (keep, old))
+            conn.execute('INSERT OR IGNORE INTO reviews (property_id, state, reviewed_at, note) '
+                         'SELECT ?, state, reviewed_at, note FROM reviews WHERE property_id = ?', (keep, old))
             conn.execute('DELETE FROM properties WHERE id = ? AND NOT EXISTS '
                          '(SELECT 1 FROM listings WHERE property_id = ?)', (old, old))
     conn.commit()
