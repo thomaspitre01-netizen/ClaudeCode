@@ -13,7 +13,10 @@ import re
 import urllib.parse
 from dataclasses import dataclass, field
 
-from bs4 import BeautifulSoup
+try:
+    from bs4 import BeautifulSoup
+except ImportError:          # no PyPI access: fall back to the stdlib reader
+    from ._minisoup import BeautifulSoup
 
 from ..normalize import nfkc
 
@@ -127,7 +130,7 @@ def _text(el) -> str:
 def page_title(soup: BeautifulSoup) -> str | None:
     og = soup.find('meta', property='og:title')
     if og and og.get('content'):
-        return nfkc(og['content'])
+        return re.sub(r'\s*[|｜]\s*[^|｜]{1,20}$', '', nfkc(og['content'])) or None   # 'Title｜Site'
     h1 = soup.find('h1')
     if h1 and _text(h1):
         return _text(h1)
@@ -158,12 +161,23 @@ def extract_pairs(soup: BeautifulSoup) -> dict[str, str]:
         # th td th td ... rows (SUUMO's two-column spec tables)
         i = 0
         while i < len(cells) - 1:
-            if cells[i].name == 'th' and cells[i + 1].name == 'td':
+            if cells[i + 1].name == 'td' and (cells[i].name == 'th' or _is_label_cell(cells[i])):
                 add(_text(cells[i]), _text(cells[i + 1]))
                 i += 2
             else:
                 i += 1
     return pairs
+
+
+_LABEL_CLASS = re.compile(r'(title|label|head|name|item)', re.I)
+_VALUE_CLASS = re.compile(r'(content|value|data|body|detail)', re.I)
+
+
+def _is_label_cell(td) -> bool:
+    """<td class="td_gaiyou_title1">建物構造</td><td class="td_gaiyou_content1">...: the R不動産
+    spec table marks its label cells by class instead of using <th>."""
+    cls = ' '.join(td.get('class') or [])
+    return bool(_LABEL_CLASS.search(cls)) and not _VALUE_CLASS.search(cls)
 
 
 _DESC_CLASS = re.compile(r'(comment|appeal|point|description|feature|remarks|detail[-_]?text|'

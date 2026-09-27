@@ -9,7 +9,8 @@ There is no website yet: this is the data layer a dashboard will sit on.
 ## Quick start
 
 ```bash
-pip install -r japan_re/requirements.txt
+pip install -r japan_re/requirements.txt   # without PyPI access, requests alone is enough:
+                                          # a stdlib HTML reader stands in for beautifulsoup4
 export JRE_CONTACT=you@example.com        # goes in the User-Agent so sites can reach you
 
 python -m japan_re sources -v             # what is crawled, and why or why not

@@ -28,19 +28,18 @@ class Suumo(Source):
     # /chukoikkodate/tokyo/sc_musashino/nc_76543210/  /tochi/.../nc_123/  /ms/chuko/.../nc_123/
     detail_re = re.compile(r'suumo\.jp/(?:chukoikkodate|ikkodate|tochi|ms/chuko)/[^?#]*?nc_(?P<id>\d+)/?(?:$|[?#])')
 
-    # SUUMO's search takes the JIS city code directly, so no slug guessing:
-    # bs=021 used detached houses, bs=030 land, bs=011 used condos.
-    BS = {'detached_house': '021', 'land': '030', 'condominium': '011'}
+    # The browse pages (/chukoikkodate/tokyo/sc_musashino/) are open to crawlers; the
+    # /jj/bukken/ichiran/JJ012FC001/ search form is disallowed in robots.txt.
+    PATHS = {'detached_house': 'chukoikkodate', 'land': 'tochi', 'condominium': 'ms/chuko'}
+    SLUG_EXCEPTIONS = {'14301': 'miuragun'}     # Hayama is listed as 三浦郡
+
+    def suumo_slug(self, m) -> str:
+        return self.SLUG_EXCEPTIONS.get(m.code) or re.sub(r'-(ku|city|town|village|shi|machi)$', '', m.slug)
 
     def search_targets(self, munis, categories=('detached_house', 'land')):
-        out = []
-        for m in munis:
-            for cat in categories:
-                q = urllib.parse.urlencode({'ar': '030', 'bs': self.BS[cat], 'ta': PREF_CODE[m.pref],
-                                            'sc': m.code, 'pc': '100', 'po': '0'})
-                out.append(SearchTarget(f'https://suumo.jp/jj/bukken/ichiran/JJ012FC001/?{q}',
-                                        cat, f'{m.name_en} / {cat}'))
-        return out
+        return [SearchTarget(f'https://suumo.jp/{self.PATHS[cat]}/{PREF_SLUG[m.pref]}/sc_{self.suumo_slug(m)}/',
+                             cat, f'{m.name_en} / {cat}')
+                for m in munis for cat in categories]
 
     def canonical_url(self, url):
         url = super().canonical_url(url).split('?')[0]

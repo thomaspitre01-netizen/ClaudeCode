@@ -134,6 +134,68 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(stations[0]['station_en'], 'Kichijoji')
         self.assertIn('販売価格', json.loads(row['raw_fields_json']))
 
+    def test_suumo_targets_are_browse_pages(self):
+        from japan_re import areas
+        from japan_re.fetch import RobotsRules
+        s = sources.get('suumo')
+        urls = [t.url for t in s.search_targets(areas.select('core', ['Musashino', 'Hayama']), ('detached_house', 'land'))]
+        self.assertIn('https://suumo.jp/chukoikkodate/tokyo/sc_musashino/', urls)
+        self.assertIn('https://suumo.jp/tochi/kanagawa/sc_miuragun/', urls)
+        # the JJ012FC001 search form is disallowed for all agents
+        robots = RobotsRules.parse('User-agent: *\nDisallow: /jj/bukken/ichiran/JJ012FC001/\n')
+        self.assertTrue(all(robots.allowed(u.replace('https://suumo.jp', '')) for u in urls))
+
+    def test_r_estate_td_label_table_and_condo(self):
+        html = """<html><head><meta property="og:title" content="白い団地｜Ｒ不動産"></head><body><table>
+            <tr><td class="td_gaiyou_title1"><span>価格</span></td><td class="td_gaiyou_content1">3,590万円</td>
+                <td class="td_gaiyou_title2">所在地</td><td class="td_gaiyou_content1">藤沢市辻堂</td></tr>
+            <tr><td class="td_gaiyou_title1">建物面積</td><td class="td_gaiyou_content1">71.03㎡</td>
+                <td class="td_gaiyou_title2">所在階</td><td class="td_gaiyou_content1">1階</td></tr>
+            <tr><td class="td_gaiyou_title1">敷地面積</td><td class="td_gaiyou_content1">2401.43㎡</td>
+                <td class="td_gaiyou_title2">修繕積立金</td><td class="td_gaiyou_content1">15,260円</td></tr>
+            </table></body></html>"""
+        s = sources.get('real_kamakura')
+        p = s.parse_detail([('https://www.realkamakuraestate.jp/estate.php?n=1', html)], 'detached_house')
+        self.assertEqual(p.title, '白い団地')
+        row, _ = records.build(p)
+        self.assertEqual(row['price_jpy'], 35_900_000)
+        self.assertEqual(row['property_type'], 'condominium')
+        self.assertIsNone(row['land_area_m2'])          # the block's site, not the flat's land
+
+    def test_ieichiba_post(self):
+        html = """<html><body><h1>守谷海水浴場から近い、贅沢な広さの更地です</h1>
+            <a href="/area-city/122181" class="page__address">千葉県勝浦市</a>
+            <p class="page__body">218坪と贅沢な広さの土地です。</p>
+            <div class="page__body-summary"><p class="page__body-overview">【物件概要】※土地のみ
+場所：千葉県勝浦市守谷
+土地：218坪（更地）
+建物：なし
+構造：
+現況：更地
+</p><div class="page__body-price"><div>希望価格：<span>400万円</span></div></div></div>
+            <a href="/area/chiba/page/2"></a></body></html>"""
+        s = sources.get('ieichiba')
+        p = s.parse_detail([('https://www.ieichiba.com/project/P202600853', html)], 'detached_house')
+        row, _ = records.build(p)
+        self.assertEqual(row['price_jpy'], 4_000_000)
+        self.assertEqual(row['property_type'], 'land')
+        self.assertAlmostEqual(row['land_area_m2'], 720.7, places=0)
+        self.assertEqual(p.pairs['所在地'], '千葉県勝浦市守谷')
+        self.assertNotIn('構造', p.pairs)
+        self.assertEqual(s.next_page(html, 'https://www.ieichiba.com/area/chiba'),
+                         'https://www.ieichiba.com/area/chiba/page/2')
+
+    def test_minisoup_matches_bs4_subset(self):
+        from japan_re.sources._minisoup import BeautifulSoup
+        import re as _re
+        soup = BeautifulSoup('<title>T</title><dl><dt>価格<dd>1万円<dt>面積<dd>2㎡</dl>'
+                             '<a rel="next nofollow" href="/p2">x</a><script>var a=1</script><p class="a b">hi</p>')
+        self.assertEqual([d.get_text() for d in soup.find('dl').find_all('dd')], ['1万円', '2㎡'])
+        self.assertEqual(soup.find('a', rel='next')['href'], '/p2')
+        self.assertEqual(soup.title.get_text(), 'T')
+        self.assertEqual(soup.find('p', class_=_re.compile('^b$')).get_text(), 'hi')
+        self.assertNotIn('var a', soup.get_text(' ', strip=True))
+
     def test_specialist_kominka(self):
         s = sources.get('real_kamakura')
         url = 'https://www.realkamakuraestate.jp/estate.php?n=27272'

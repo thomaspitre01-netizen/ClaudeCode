@@ -24,7 +24,7 @@ LABELS = {
     'coverage':   ('建ぺい率', '建蔽率'),
     'far':        ('容積率',),
     'zoning':     ('用途地域',),
-    'road':       ('接道状況', '接道', '前面道路', '道路', '接道条件'),
+    'road':       ('接道状況', '接道', '前面道路', '道路', '接道条件', '私道負担・道路'),
     'rights':     ('土地権利', '権利形態', '土地の権利形態', '土地権利形態', '権利'),
     'shape':      ('地勢', '土地形状', '形状', '地形'),
     'planning':   ('都市計画',),
@@ -98,6 +98,10 @@ def build(p: ParsedListing) -> tuple[dict, list[dict]]:
     row['property_type'], row['property_type_evidence'] = n.classify_type(
         p.category_hint, ' '.join(x for x in (p.title, g('type')) if x), p.description)
     row['property_type_ja'] = g('type')
+    if row['property_type'] == 'condominium' and row['land_area_m2']:
+        # a flat's 敷地面積 is the whole block's site, not land the buyer gets
+        row['land_area_note_ja'] = f"敷地全体 {row['land_area_m2']}m2"
+        row['land_area_m2'] = None
     row['condition'], row['condition_evidence'] = n.classify_condition(row['year_built'], *texts)
     if row['property_type'] == 'land' and row['condition'] == 'unknown' and not row['building_area_m2']:
         row['condition'] = None   # bare land: renovation does not apply
