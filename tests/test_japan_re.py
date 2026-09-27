@@ -361,29 +361,59 @@ class SummaryTests(unittest.TestCase):
 
 class LeadsTests(unittest.TestCase):
     def row(self, **kw):
-        base = dict(price_jpy=45_000_000, property_type='detached_house', year_built=1972,
-                    condition='major_renovation', land_area_m2=200.0, land_rights='freehold',
-                    rebuild_prohibited=0, first_seen='2026-01-01', municipality='Suginami',
-                    neighborhood_ja='高円寺南3丁目', address_ja='杉並区高円寺南3丁目')
+        base = dict(property_id=1, price_jpy=45_000_000, initial_price_jpy=45_000_000,
+                    property_type='detached_house', year_built=1972, condition='major_renovation',
+                    land_area_m2=260.0, building_area_m2=110.0, land_rights='freehold', rebuild_prohibited=0,
+                    first_seen='2026-09-27', municipality='Suginami', neighborhood_ja='高円寺南3丁目',
+                    address_ja='杉並区高円寺南3丁目', price_per_m2_land=173_000, station_walk_min=8,
+                    nearest_station='JR Chuo Line / Koenji', title_ja='', description_ja='', restrictions_ja='')
         base.update(kw)
         return base
 
-    def test_area_matching(self):
+    def assess(self, **kw):
         from japan_re import leads
-        self.assertEqual(leads.area_of(self.row(), {}), 'Koenji')
-        self.assertEqual(leads.area_of(self.row(neighborhood_ja='荻窪', address_ja=''), {'Koenji': 12}), 'Koenji')
-        self.assertIsNone(leads.area_of(self.row(neighborhood_ja='荻窪', address_ja=''), {'Koenji': 25}))
-        self.assertEqual(leads.area_of(self.row(municipality='Musashino'), {}), 'Kichijoji')
+        r = self.row(**kw)
+        area, tier = leads.locate(r, {})
+        return leads.assess(r, area, tier, {'Suginami': 400_000}, None, leads._text(r))
 
-    def test_old_cheap_traditional_ranks_first(self):
+    def test_locate(self):
         from japan_re import leads
-        old, _ = leads.score(self.row(property_type='kominka'))
-        condo, _ = leads.score(self.row(property_type='condominium', year_built=2015, condition='unknown',
-                                        land_area_m2=None, price_jpy=90_000_000))
-        lease, why = leads.score(self.row(land_rights='leasehold'))
-        self.assertGreater(old, lease)
-        self.assertGreater(lease, condo)
-        self.assertIn('NOT freehold (leasehold)', why)
+        self.assertEqual(leads.locate(self.row(), {}), ('Koenji', 'primary'))
+        other = self.row(neighborhood_ja='桃井', address_ja='')
+        self.assertEqual(leads.locate(other, {'高円寺': 12}), ('Koenji', 'primary'))
+        self.assertEqual(leads.locate(other, {'高円寺': 25}), (None, None))
+        self.assertEqual(leads.locate(other, {'西荻窪': 5}), ('Nishi-Ogikubo', 'secondary'))
+        self.assertEqual(leads.locate(self.row(municipality='Kamakura', neighborhood_ja='山ノ内', address_ja='鎌倉市山ノ内'), {}),
+                         ('Kita-Kamakura', 'primary'))
+
+    def test_old_house_with_land_beats_new_flat(self):
+        house = self.assess()
+        self.assertTrue(house.is_lead)
+        self.assertIn('Renovation Opportunities', house.categories)
+        self.assertIn('Price Opportunities', house.categories)       # ¥173k/m² vs ¥400k median
+        self.assertEqual(house.indicators['Price'][1], 'sweet spot ¥30-50M')
+        self.assertIn('260 m² of land in Koenji, built 1972, needs major renovation, 8 min from Koenji',
+                      house.reason)
+        flat = self.assess(property_type='condominium', year_built=2018, condition='move_in_ready',
+                           land_area_m2=None, price_per_m2_land=None)
+        self.assertFalse(flat.is_lead)
+        self.assertGreater(house.weight, flat.weight)
+
+    def test_above_ideal_budget_needs_more(self):
+        plain = self.assess(price_jpy=65_000_000, year_built=2012, condition='unknown', price_per_m2_land=None)
+        self.assertFalse(plain.is_lead)
+        self.assertEqual(plain.categories, ['Watchlist'])
+        old = self.assess(price_jpy=65_000_000)
+        self.assertTrue(old.is_lead)
+        self.assertEqual(old.indicators['Price'][0], '🟡')
+
+    def test_leasehold_is_flagged(self):
+        L = self.assess(land_rights='leasehold')
+        self.assertEqual(L.indicators['Freehold'], ('🔴', 'leasehold'))
+        self.assertLess(L.weight, self.assess().weight)
+
+    def test_station_name_is_not_machiya(self):
+        self.assertNotEqual(n.classify_type('detached_house', '家', '「湘南町屋」駅 徒歩5分')[0], 'machiya')
 
 
 if __name__ == '__main__':

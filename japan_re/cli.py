@@ -238,19 +238,26 @@ def cmd_events(conn, a):
 
 def cmd_leads(conn, a):
     from . import leads
-    found = leads.find(conn, areas=a.area, max_price=a.max_price, limit=a.limit)
+    found = leads.find(conn, areas=a.area, include_secondary=not a.primary_only, max_price=a.max_price)
+    if not a.watchlist:
+        found = [L for L in found if L.is_lead or a.out]
     if a.out:
         out = Path(a.out)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(leads.to_markdown(found), encoding='utf-8')
-        print(f'{len(found)} leads written to {out}')
+        if a.format == 'json':
+            out.write_text(json.dumps(leads.to_json(found), ensure_ascii=False, indent=1), encoding='utf-8')
+        else:
+            out.write_text(leads.to_markdown(found), encoding='utf-8')
+        print(f'{sum(L.is_lead for L in found)} leads, {sum(not L.is_lead for L in found)} watchlist -> {out}')
         return
-    from .translate import summary_en
-    for x in found:
-        r = x['row']
-        print(f'{x["score"]:>3}  #{r["property_id"]:<6} [{x["area"]}] {summary_en(r)}')
-        print(f'          {", ".join(x["why"])}  {r["primary_url"]}')
-    print(f'{len(found)} leads')
+    for L in found[:a.limit]:
+        r = L.row
+        dots = ''.join(d for d, _ in L.indicators.values())
+        tag = '' if L.is_lead else ' [watchlist]'
+        print(f'#{r["property_id"]:<6} {dots} {", ".join(L.categories)}{tag}')
+        print(f'        {L.reason}')
+        print(f'        {r["primary_url"]}')
+    print(f'{sum(L.is_lead for L in found)} leads')
 
 
 def cmd_export(conn, a):
@@ -354,12 +361,14 @@ def main(argv=None):
     p.add_argument('--limit', type=int, default=100)
     p.set_defaults(fn=cmd_events)
 
-    p = sub.add_parser('leads', help='short list: Kichijoji/Nakano/Koenji/Kamakura, under ¥100M, '
-                                     'cheap, old and traditional first')
-    p.add_argument('--area', action='append', choices=['Kichijoji', 'Nakano', 'Koenji', 'Kamakura'])
-    p.add_argument('--max-price', type=_yen, default=100_000_000)
+    p = sub.add_parser('leads', help='the curated short list: ≤¥70M, land/age/character/renovation first')
+    p.add_argument('--area', action='append', help='e.g. Kichijoji, Koenji, Kamakura, Zushi (repeatable)')
+    p.add_argument('--primary-only', action='store_true', help='Kichijoji/Nakano/Koenji/Kamakura/Kita-Kamakura')
+    p.add_argument('--max-price', type=_yen, default=70_000_000, help='capped at ¥70M')
+    p.add_argument('--watchlist', action='store_true', help='also print watchlist entries')
     p.add_argument('--limit', type=int, default=60)
-    p.add_argument('--out', help='write a Markdown list here instead of printing')
+    p.add_argument('--out', help='write the whole Leads page (leads + watchlist) here')
+    p.add_argument('--format', choices=['md', 'json'], default='md')
     p.set_defaults(fn=cmd_leads)
 
     p = sub.add_parser('export', help='write v_properties to CSV or JSON')

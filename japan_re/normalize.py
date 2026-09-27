@@ -383,6 +383,9 @@ _TYPE_RULES = [  # (type, keywords) - first match wins, most specific first
 ]
 
 
+_NOT_MACHIYA = re.compile(r'湘南町屋|町屋駅|「町屋」|町屋\s*(?:駅|徒歩|バス)')
+
+
 def classify_type(category_hint: str | None, headline: str | None,
                   description: str | None = None) -> tuple[str, str | None]:
     """Property type from the source's own category (the URL section the listing came
@@ -396,8 +399,9 @@ def classify_type(category_hint: str | None, headline: str | None,
     A 'land' listing with an old house on it (古家付き土地) stays 'land'; the house is
     what the condition field records as derelict_rebuild.
     """
-    head = nfkc(headline)
-    blob = head + ' ' + nfkc(description)
+    # 町屋 is also a station name (湘南町屋 in Kamakura, 町屋 in Arakawa): not a townhouse
+    head = _NOT_MACHIYA.sub('', nfkc(headline))
+    blob = head + ' ' + _NOT_MACHIYA.sub('', nfkc(description))
     for ptype, kws in _TYPE_RULES[:3]:
         for kw in kws:
             if kw in blob:
