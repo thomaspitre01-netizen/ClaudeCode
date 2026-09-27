@@ -55,6 +55,11 @@ TRADITIONAL_WORDS = ('古民家', '日本家屋', '純和風', '数寄屋', '数
 GARDEN_WORDS = ('庭', 'ガーデン')
 UNUSUAL_WORDS = ('アトリエ', '土蔵', '蔵付', '茶室', '店舗付', '店舗併用', '平屋', '洋館', '擁壁', '旗竿', '変形地',
                  '崖', '高台', '眺望', '離れ', '別棟', '二世帯', '工場', '倉庫', '山林', '菜園', '井戸')
+WORDS_EN = {'アトリエ': 'atelier', '土蔵': 'kura storehouse', '蔵付': 'with kura', '茶室': 'tea room',
+            '店舗付': 'with shop', '店舗併用': 'shop + home', '平屋': 'single-storey', '洋館': 'Western-style house',
+            '擁壁': 'retaining wall', '旗竿': 'flag-shaped lot', '変形地': 'irregular plot', '崖': 'slope/cliff',
+            '高台': 'hilltop', '眺望': 'views', '離れ': 'annex', '別棟': 'second building', '二世帯': 'two-family',
+            '工場': 'workshop', '倉庫': 'storehouse', '山林': 'woodland', '菜園': 'vegetable garden', '井戸': 'well'}
 REDEVELOP_WORDS = ('古家付', '古家あり', '更地渡し', '建築条件なし', '分割', '二区画', '2区画', '建替', '建て替え')
 
 GREEN, YELLOW, RED, GREY = '🟢', '🟡', '🔴', '⚪'
@@ -209,7 +214,7 @@ def assess(r, area, tier, medians, new_since, text) -> Lead:
         extras.append('garden'); sig.append('garden')
     unusual = [w for w in UNUSUAL_WORDS if w in text]
     if unusual:
-        extras.append('unusual: ' + '/'.join(unusual[:3])); sig.append('unusual')
+        extras.append('unusual: ' + ', '.join(WORDS_EN.get(w, w) for w in unusual[:3])); sig.append('unusual')
     if any(w in text for w in REDEVELOP_WORDS):
         extras.append('redevelopment potential'); sig.append('redevelop')
     if r['rebuild_prohibited']:
