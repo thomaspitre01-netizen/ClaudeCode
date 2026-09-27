@@ -112,6 +112,7 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(links, ['https://suumo.jp/chukoikkodate/tokyo/sc_musashino/nc_71234567/',
                                  'https://suumo.jp/chukoikkodate/tokyo/sc_musashino/nc_71234568/'])
         self.assertIn('pn=2', s.next_page(read('suumo_list.html'), url))
+        self.assertEqual(s.skipped, {'over ¥150M': 1, 'bus only': 1, 'no photos': 1, 'nearby suggestion': 1})
 
     def test_suumo_detail_record(self):
         s = sources.get('suumo')
@@ -338,7 +339,8 @@ class CrawlTests(unittest.TestCase):
             self.assertEqual(stats['robots_blocked'], 1)        # page 2 disallowed
             self.assertFalse(stats['complete'])                 # so nothing may be marked removed
             row = conn.execute('SELECT * FROM v_properties').fetchone()
-            self.assertEqual(row['zoning'], 'Category 1 low-rise exclusive residential')
+            self.assertEqual(row['price_jpy'], 69_800_000)
+            self.assertNotIn(a + 'bukkengaiyo/', client.requested)   # spec tab no longer fetched
             # second run: fresh listing is not re-fetched
             client.requested.clear()
             crawl_source(conn, client, s, musashino, ('detached_house',), log=lambda *_: None)

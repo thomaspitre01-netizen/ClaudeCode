@@ -65,7 +65,9 @@ def crawl_source(conn, client: PoliteClient, source: Source, munis, categories=(
                     if _stale(conn, link, refresh_days):
                         queue.append((link, t.category_hint))
                 conn.commit()
-                log(f'  {t.label}: page {pages}, {len(links)} listings')
+                skipped = getattr(source, 'skipped', None)
+                log(f'  {t.label}: page {pages}, {len(links)} listings'
+                    + (f' (skipped {", ".join(f"{n} {k}" for k, n in skipped.items())})' if skipped else ''))
                 url = source.next_page(page.html, page.url)
             if url and pages >= source.max_pages_per_target:
                 complete = False

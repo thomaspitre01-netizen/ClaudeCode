@@ -9,7 +9,8 @@ from __future__ import annotations
 import re
 import urllib.parse
 
-from .base import SearchTarget, Source
+from ..normalize import nfkc, parse_price
+from .base import BeautifulSoup, SearchTarget, Source
 
 PREF_SLUG = {'Tokyo': 'tokyo', 'Kanagawa': 'kanagawa'}
 PREF_CODE = {'Tokyo': '13', 'Kanagawa': '14'}
@@ -55,13 +56,61 @@ class Suumo(Source):
                                             cat, f'{name} / {cat}'))
         return out
 
+    # Skip before fetching (Thomas, 27 Sep 2026): over the ¥150M hard cap, more than a
+    # 30-minute walk from any station (or bus only), no photos, or SUUMO's "nearby"
+    # suggestions from other areas (?fmlg=), which their own area's crawl covers.
+    MAX_PRICE = 150_000_000
+    MAX_WALK = 30
+
+    def detail_links(self, html, page_url):
+        soup = BeautifulSoup(html, 'html.parser')
+        keep, self.skipped = [], {}
+        cards = soup.find_all('div', class_='property_unit')
+        if not cards:                      # page layout changed: fall back to every link
+            return super().detail_links(html, page_url)
+        for card in cards:
+            a = next((x for x in card.find_all('a', href=True) if self.detail_re.search(
+                urllib.parse.urljoin(page_url, x['href']))), None)
+            if not a:
+                continue
+            href = urllib.parse.urljoin(page_url, a['href'])
+            why = self.skip_reason(card, href)
+            if why:
+                self.skipped[why] = self.skipped.get(why, 0) + 1
+                continue
+            href = self.canonical_url(href)
+            if href not in keep:
+                keep.append(href)
+        return keep
+
+    def skip_reason(self, card, href) -> str | None:
+        if 'fmlg=' in href:
+            return 'nearby suggestion'
+        fields = {nfkc(dt.get_text(strip=True)): nfkc(dd.get_text(' ', strip=True))
+                  for dl in card.find_all('dl') for dt, dd in zip(dl.find_all('dt'), dl.find_all('dd'))}
+        price = parse_price(fields.get('販売価格') or fields.get('価格'))[0]
+        if price and price > self.MAX_PRICE:
+            return 'over ¥150M'
+        access = fields.get('沿線・駅') or ''
+        walks = [int(x) for x in re.findall(r'徒歩\s*(\d+)\s*分', access)]
+        if walks and min(walks) > self.MAX_WALK:
+            return 'over 30 min walk'
+        if access and not walks and 'バス' in access:
+            return 'bus only'
+        photos = [i for i in card.find_all('img') if 'suumo.com' in (i.get('rel') and ' '.join(i.get('rel'))
+                                                                      or i.get('src') or '')]
+        if not photos:
+            return 'no photos'
+        return None
+
     def canonical_url(self, url):
         url = super().canonical_url(url).split('?')[0]
         m = re.search(r'^(.*?nc_\d+/)', url)
         return m.group(1) if m else url
 
-    def extra_pages(self, url):
-        return [url.rstrip('/') + '/bukkengaiyo/']   # the full specification tab
+    # The /bukkengaiyo/ spec tab repeats what the main page already carries (checked
+    # 27 Sep 2026: identical parsed record with and without it), so it is not fetched;
+    # that halves the requests per listing.
 
     def category_from_url(self, url, default):
         if '/tochi/' in url:
