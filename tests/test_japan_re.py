@@ -161,6 +161,10 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(row['price_jpy'], 35_900_000)
         self.assertEqual(row['property_type'], 'condominium')
         self.assertIsNone(row['land_area_m2'])          # the block's site, not the flat's land
+        pager = ('<div id="search_pager"><strong>1</strong> | <span class="pager" onclick="location.href = '
+                 "'/estate_search.php?mode=key&p=2&c=100'\">&nbsp;&nbsp;次のページ&nbsp;&gt;</span></div>")
+        self.assertEqual(s.next_page(pager, 'https://www.realkamakuraestate.jp/estate_search.php?mode=key'),
+                         'https://www.realkamakuraestate.jp/estate_search.php?mode=key&p=2&c=100')
 
     def test_ieichiba_post(self):
         html = """<html><body><h1>守谷海水浴場から近い、贅沢な広さの更地です</h1>

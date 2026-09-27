@@ -34,8 +34,13 @@ class RealKamakura(Source):
         # The site covers Kamakura/Zushi/Hayama/Shonan only, so one index serves all
         # municipalities; out-of-area results are marked out of scope when stored.
         # type[]=2 is 売買 (for sale); mode=all mixes in rentals.
-        return [SearchTarget(f'{self.base_url}estate_search.php?mode=key&type[]=2', 'detached_house',
-                             'for sale')]
+        return [SearchTarget(f'{self.base_url}estate_search.php?mode=key&type%5B%5D=2&p=1&c=100&r=0&a=0',
+                             'detached_house', 'for sale')]
+
+    def next_page(self, html, page_url):
+        # the pager is <span onclick="location.href = '...&p=2...'">次のページ &gt;</span>
+        m = re.search(r"location\.href\s*=\s*'([^']+)'\s*\"?>(?:&nbsp;|\s)*次のページ", html)
+        return urllib.parse.urljoin(page_url, m.group(1).replace('&amp;', '&')) if m else None
 
     def canonical_url(self, url):
         m = self.detail_re.search(url)
