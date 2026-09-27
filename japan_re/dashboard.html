@@ -92,6 +92,11 @@ svg.map .stext{fill:var(--muted);font:11px var(--mono)}
 .ind span b{color:var(--ink);font-weight:700}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--grey)}
 .dot.g{background:var(--good)}.dot.y{background:var(--warn)}.dot.r{background:var(--bad)}
+.photos{display:flex;gap:6px;overflow-x:auto}
+.photos img{height:150px;width:auto;max-width:none;border-radius:6px;flex:none}
+.contact{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:baseline;font-size:13px;background:var(--soft);border-radius:6px;padding:8px 10px}
+.contact small{color:var(--muted)}
+.sel-all{user-select:all}
 .desc summary{cursor:pointer;font-size:12px;color:var(--ai)}
 .desc p{margin:6px 0 0;line-height:1.7;max-width:70ch}
 .foot{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--muted)}
@@ -289,6 +294,18 @@ function english(p){
   if(p.year_built) b.push(`built ${p.year_built}`);
   return b.join(' · ');
 }
+const DAYS = {'月':'Mon','火':'Tue','水':'Wed','木':'Thu','金':'Fri','土':'Sat','日':'Sun','祝':'holidays'};
+const closedEn = t => /なし|無休/.test(t) ? 'open every day' : 'closed '+t.replace(/毎週|曜日|曜/g,'').split(/[・、,\/]/).map(x=>x.trim()).filter(Boolean).map(x=>[...x].map(c=>DAYS[c]||c).join('')).join(', ');
+function contactBlock(c){
+  if(!c||!(c.phone||c.emails)) return '';
+  const rows=[];
+  if(c.company) rows.push(`<span class="jp">${esc(c.company)}</span>`);
+  if(c.person) rows.push(`<span>Agent <span class="jp">${esc(c.person)}</span></span>`);
+  if(c.phone) rows.push(`<span>Phone <b class="num sel-all">${esc(c.phone)}</b>${/^0120|^0800/.test(c.phone)?' <small>(freephone, Japan only)</small>':` <small>(from abroad +81 ${esc(c.phone.replace(/^0/,''))})</small>`}</span>`);
+  (c.emails||[]).forEach(e=>rows.push(`<span>Email <b class="sel-all">${esc(e)}</b></span>`));
+  if(c.hours) rows.push(`<span>Hours ${esc(c.hours)}${c.closed?`, ${esc(closedEn(c.closed))}`:''} (Japan time)</span>`);
+  return `<div class="contact"><b>Contact the agent</b>${rows.join('')}<small>Say you saw it on SUUMO (「SUUMOを見た」).</small></div>`;
+}
 const dotClass = d => ({'🟢':'g','🟡':'y','🔴':'r'}[d]||'');
 function card(p){
   const L = S.tab==='leads'?p:p.lead, lead=L&&L.is_lead;
@@ -312,11 +329,14 @@ function card(p){
     <div class="jp">${esc(p.title_ja||'')}${p.address_ja?` ／ ${esc(p.address_ja)}`:''}${p.condition_evidence?` ／ ${esc(p.condition_evidence)}`:''}</div>
     <div class="tags">${tags.join('')}</div>
     ${ind}
-    ${p.description_ja?`<details class="desc"><summary>Full listing text (Japanese)</summary><p class="jp">${esc(p.description_ja)}</p></details>`:''}
-    <div class="foot"><span>#${p.property_id}</span>${p.price_per_m2_land?`<span class="num">¥${Math.round(p.price_per_m2_land/1e3).toLocaleString('en')}k/m² land</span>`:''}${p.est_acquisition_cost_jpy?`<span>Est. all-in purchase ${yen(p.est_acquisition_cost_jpy)}</span>`:''}${src?`<span>via ${esc(src)}</span>`:''}${p.agency_name?`<span class="jp">${esc(p.agency_name)}</span>`:''}${p.agency_phone?`<span>Agent <span class="num" style="user-select:all">${esc(p.agency_phone)}</span></span>`:''}${(p.links||[{source:'listing',url:p.primary_url}]).filter(l=>l.url).map(l=>`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(SRC[l.source]||l.source)} ↗</a>`).join('')}${p.lat?`<a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}" target="_blank" rel="noopener">Google Maps ↗</a>`:''}</div>
+    ${p.photos?`<div class="photos">${p.photos.map((d,i)=>`<img src="${d}" alt="Photo ${i+1} of listing #${p.property_id}" loading="lazy">`).join('')}</div>`:''}
+    ${p.description_en?`<details class="desc"><summary>Full listing (English)</summary><p>${esc(p.description_en)}</p></details>`:''}
+    ${p.description_ja?`<details class="desc"><summary>${p.description_en?'Original Japanese':'Full listing text (Japanese, not yet translated)'}</summary><p class="jp">${esc(p.description_ja)}</p></details>`:''}
+    ${contactBlock(p.contact)}
+    <div class="foot"><span>#${p.property_id}</span>${p.price_per_m2_land?`<span class="num">¥${Math.round(p.price_per_m2_land/1e3).toLocaleString('en')}k/m² land</span>`:''}${p.est_acquisition_cost_jpy?`<span>Est. all-in purchase ${yen(p.est_acquisition_cost_jpy)}</span>`:''}${src?`<span>via ${esc(src)}</span>`:''}${(p.links||[{source:'listing',url:p.primary_url}]).filter(l=>l.url).map((l,i,a)=>{const n=a.filter(x=>x.source===l.source), k=n.indexOf(l); return `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(SRC[l.source]||l.source)}${n.length>1?' '+(k+1):''} ↗</a>`}).join('')}${p.lat?`<a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}" target="_blank" rel="noopener">Google Maps ↗</a>`:''}</div>
   </article>`;
 }
-$('cards').onclick=e=>{if(e.target.closest('a,details')) return; const c=e.target.closest('.card'); if(c) select(+c.dataset.id,false);};
+$('cards').onclick=e=>{if(e.target.closest('a,details,.contact')) return; const c=e.target.closest('.card'); if(c) select(+c.dataset.id,false);};
 $('cards').onkeydown=e=>{if(e.key==='Enter'){const c=e.target.closest('.card'); if(c) select(+c.dataset.id,false);}};
 
 function median(a){if(!a.length) return null; const s=[...a].sort((x,y)=>x-y), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2;}
