@@ -359,5 +359,32 @@ class SummaryTests(unittest.TestCase):
                                '8 min walk (Kita-Kamakura) · ¥155k/m² land · major renovation')
 
 
+class LeadsTests(unittest.TestCase):
+    def row(self, **kw):
+        base = dict(price_jpy=45_000_000, property_type='detached_house', year_built=1972,
+                    condition='major_renovation', land_area_m2=200.0, land_rights='freehold',
+                    rebuild_prohibited=0, first_seen='2026-01-01', municipality='Suginami',
+                    neighborhood_ja='高円寺南3丁目', address_ja='杉並区高円寺南3丁目')
+        base.update(kw)
+        return base
+
+    def test_area_matching(self):
+        from japan_re import leads
+        self.assertEqual(leads.area_of(self.row(), {}), 'Koenji')
+        self.assertEqual(leads.area_of(self.row(neighborhood_ja='荻窪', address_ja=''), {'Koenji': 12}), 'Koenji')
+        self.assertIsNone(leads.area_of(self.row(neighborhood_ja='荻窪', address_ja=''), {'Koenji': 25}))
+        self.assertEqual(leads.area_of(self.row(municipality='Musashino'), {}), 'Kichijoji')
+
+    def test_old_cheap_traditional_ranks_first(self):
+        from japan_re import leads
+        old, _ = leads.score(self.row(property_type='kominka'))
+        condo, _ = leads.score(self.row(property_type='condominium', year_built=2015, condition='unknown',
+                                        land_area_m2=None, price_jpy=90_000_000))
+        lease, why = leads.score(self.row(land_rights='leasehold'))
+        self.assertGreater(old, lease)
+        self.assertGreater(lease, condo)
+        self.assertIn('NOT freehold (leasehold)', why)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -236,6 +236,23 @@ def cmd_events(conn, a):
         print(f'{e["observed_at"][:10]} {e["event_type"]:<13} #{e["property_id"]:<6} {e["municipality"]:<12} {extra}')
 
 
+def cmd_leads(conn, a):
+    from . import leads
+    found = leads.find(conn, areas=a.area, max_price=a.max_price, limit=a.limit)
+    if a.out:
+        out = Path(a.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(leads.to_markdown(found), encoding='utf-8')
+        print(f'{len(found)} leads written to {out}')
+        return
+    from .translate import summary_en
+    for x in found:
+        r = x['row']
+        print(f'{x["score"]:>3}  #{r["property_id"]:<6} [{x["area"]}] {summary_en(r)}')
+        print(f'          {", ".join(x["why"])}  {r["primary_url"]}')
+    print(f'{len(found)} leads')
+
+
 def cmd_export(conn, a):
     rows = conn.execute("SELECT * FROM v_properties" + ('' if a.all else ' WHERE in_scope = 1')).fetchall()
     out = Path(a.out)
@@ -336,6 +353,14 @@ def main(argv=None):
     p.add_argument('--days', type=int, default=7)
     p.add_argument('--limit', type=int, default=100)
     p.set_defaults(fn=cmd_events)
+
+    p = sub.add_parser('leads', help='short list: Kichijoji/Nakano/Koenji/Kamakura, under ¥100M, '
+                                     'cheap, old and traditional first')
+    p.add_argument('--area', action='append', choices=['Kichijoji', 'Nakano', 'Koenji', 'Kamakura'])
+    p.add_argument('--max-price', type=_yen, default=100_000_000)
+    p.add_argument('--limit', type=int, default=60)
+    p.add_argument('--out', help='write a Markdown list here instead of printing')
+    p.set_defaults(fn=cmd_leads)
 
     p = sub.add_parser('export', help='write v_properties to CSV or JSON')
     p.add_argument('--format', choices=['csv', 'json'], default='csv')

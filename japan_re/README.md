@@ -39,6 +39,8 @@ To keep it fresh, run it daily, e.g. with cron:
 python -m japan_re search --max-price 50M --min-land 200 --condition major_renovation
 python -m japan_re search --type kominka --type traditional_house --area Kamakura --area Zushi
 python -m japan_re search --station Kichijoji --walk 15 --built-before 1980 --sort ppm
+python -m japan_re leads                  # the short list: Kichijoji/Nakano/Koenji/Kamakura, <¥100M, old + cheap first
+python -m japan_re leads --out leads.md   # same, as a Markdown page
 python -m japan_re show 123               # one property: all sources, price history, JA + EN text
 python -m japan_re fav add 123 --note "big garden"
 python -m japan_re reno 123 --low 35M --high 50M     # prints acquisition + renovation = total
