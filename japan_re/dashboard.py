@@ -42,6 +42,7 @@ PERSON = re.compile(r'担当(?:者)?(?:[:：]\s*|\s+)([一-龥][一-龥ぁ-ん�
 EMAIL = re.compile(r'[\w.+-]+@[\w-]+\.[\w.]+')
 TRANSLATIONS = 'translations_en.json'   # {sha1(description_ja)[:16]: English}, next to the DB
 PHOTOS = 'photos.json'                  # {property_id: [data: URI, ...]}, from `japan_re photos`
+PHOTO_BUDGET = 9_000_000                # bytes of embedded photos; the published page must stay under 16 MB
 
 
 def clean_description(text: str) -> str:
@@ -87,8 +88,23 @@ def _extras(conn, property_id, translations: dict) -> dict:
                      'description_en': translations.get(desc_key(desc)) if desc else None})
 
 
+def _within_budget(photos: dict, order: list[str]) -> dict:
+    """Every lead's first photo, then second and third photos, best leads first, until the
+    budget runs out."""
+    kept, used = {}, 0
+    for rank in range(3):
+        for pid in order:
+            ph = photos.get(pid) or []
+            if rank < len(ph) and used + len(ph[rank]) <= PHOTO_BUDGET:
+                kept.setdefault(pid, []).append(ph[rank])
+                used += len(ph[rank])
+    return kept
+
+
 def build(conn, translations: dict | None = None, photos: dict | None = None) -> dict:
-    translations, photos = translations or {}, photos or {}
+    translations = translations or {}
+    found = leads.find(conn)
+    photos = _within_budget(photos or {}, [str(L.row['property_id']) for L in found if L.is_lead])
     rows = conn.execute("SELECT * FROM v_properties WHERE status = 'active' AND in_scope = 1 "
                         'AND price_jpy IS NOT NULL AND price_jpy <= ?', (HARD_MAX,)).fetchall()
     props = []
@@ -99,7 +115,6 @@ def build(conn, translations: dict | None = None, photos: dict | None = None) ->
         p.update(area=area, tier=tier, main_station=station, photos=photos.get(str(r['property_id'])),
                  **_extras(conn, r['property_id'], translations))
         props.append(_compact(p))
-    found = leads.find(conn)
     lead_rows = [_compact({k: v for k, v in x.items() if k not in ('thumbnail_url',)})
                  for x in leads.to_json(found)]
     stations = [{'area': a, 'tier': t, 'ja': names[0], 'lat': c[0], 'lng': c[1]}

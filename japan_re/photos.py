@@ -4,7 +4,7 @@ can't load images from other sites).
     python -m japan_re photos --out <dir>/photos.json
 
 SUUMO: the listing page names its photos; SUUMO's own resizer serves them small
-(img01.suumo.com/jj/resizeImage?...&w=480&h=360), so nothing is resized here. Other
+(img01.suumo.com/jj/resizeImage?...&w=360&h=270), so nothing is resized here. Other
 sources: the stored image URLs, kept only when already small enough. Photos already
 in the file are not fetched again. Everything goes through the polite client, so
 robots.txt and blocks are respected; a blocked host is skipped, never worked around.
@@ -35,7 +35,7 @@ def suumo_photos(client: PoliteClient, url: str) -> list[str]:
     for m in SUUMO_IMG.finditer(html.unescape(page.html) if page.ok else ''):
         if m.group(1) not in srcs:
             srcs.append(m.group(1))
-    return [f'https://img01.suumo.com/jj/resizeImage?src={s}&w=480&h=360' for s in srcs[:PER_LEAD]]
+    return [f'https://img01.suumo.com/jj/resizeImage?src={s}&w=360&h=270' for s in srcs[:PER_LEAD]]
 
 
 def fetch_image(client: PoliteClient, url: str) -> str | None:
