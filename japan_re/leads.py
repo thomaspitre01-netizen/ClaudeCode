@@ -5,6 +5,8 @@ Thomas's criteria (brief section 19, 27 Sep 2026), in short:
     interesting, and always flagged as above the ideal budget;
   * land + ownership + character + age + location + renovation potential, never
     newness or luxury: needing ¥30-50M of work is not a penalty;
+  * 27 Sep, later: no Suginami beyond Koenji, no Zushi or Hayama; Kamakura means the
+    Kamakura and Kita-Kamakura station areas;
   * at most a 30-minute walk from the main station of a target area (added 27 Sep);
   * Kichijoji, Nakano, Koenji, Kamakura, Kita-Kamakura first; Mitaka, Nishi-Ogikubo,
     Asagaya, Ogikubo, Higashi-/Shin-Nakano, the streets around Koenji, Zushi and Hayama
@@ -38,13 +40,8 @@ STATIONS = [  # (area, tier, station names as listings write them, (lat, lng))
     ('Kita-Kamakura', 'primary', ('北鎌倉', 'Kita-Kamakura'), (35.3370, 139.5460)),
     ('Kamakura', 'primary', ('鎌倉', 'Kamakura'), (35.3190, 139.5505)),
     ('Mitaka', 'secondary', ('三鷹', 'Mitaka'), (35.7027, 139.5607)),
-    ('Nishi-Ogikubo', 'secondary', ('西荻窪', 'Nishi-Ogikubo'), (35.7038, 139.5993)),
-    ('Ogikubo', 'secondary', ('荻窪', 'Ogikubo'), (35.7047, 139.6200)),
-    ('Asagaya', 'secondary', ('阿佐ケ谷', '阿佐ヶ谷', 'Asagaya'), (35.7050, 139.6359)),
     ('Higashi-Nakano', 'secondary', ('東中野', 'Higashi-Nakano'), (35.7068, 139.6828)),
     ('Shin-Nakano', 'secondary', ('新中野', 'Shin-Nakano'), (35.6976, 139.6690)),
-    ('Zushi', 'secondary', ('逗子', 'Zushi'), (35.2957, 139.5795)),
-    ('Zushi', 'secondary', ('逗子・葉山', '新逗子', 'Zushi-Hayama', 'Shin-Zushi'), (35.2944, 139.5840)),
 ]
 M_PER_MIN_STRAIGHT = 80 / 1.3
 

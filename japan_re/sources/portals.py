@@ -36,10 +36,24 @@ class Suumo(Source):
     def suumo_slug(self, m) -> str:
         return self.SLUG_EXCEPTIONS.get(m.code) or re.sub(r'-(ku|city|town|village|shi|machi)$', '', m.slug)
 
+    # Where Thomas only wants the streets around certain stations (27 Sep 2026: "don't
+    # include Suginami, keep Koenji"; "stay on Kamakura or Kita-Kamakura"), read the
+    # station pages (/chukoikkodate/tokyo/ek_13930/) instead of the whole municipality.
+    STATION_ONLY = {
+        '13115': [('ek_13930', 'Koenji'), ('ek_19470', 'Shin-Koenji'), ('ek_31910', 'Higashi-Koenji')],
+        '14204': [('ek_08890', 'Kamakura'), ('ek_11100', 'Kita-Kamakura')],
+    }
+
     def search_targets(self, munis, categories=('detached_house', 'land')):
-        return [SearchTarget(f'https://suumo.jp/{self.PATHS[cat]}/{PREF_SLUG[m.pref]}/sc_{self.suumo_slug(m)}/',
-                             cat, f'{m.name_en} / {cat}')
-                for m in munis for cat in categories]
+        out = []
+        for m in munis:
+            places = ([(code, name) for code, name in self.STATION_ONLY[m.code]] if m.code in self.STATION_ONLY
+                      else [(f'sc_{self.suumo_slug(m)}', m.name_en)])
+            for code, name in places:
+                for cat in categories:
+                    out.append(SearchTarget(f'https://suumo.jp/{self.PATHS[cat]}/{PREF_SLUG[m.pref]}/{code}/',
+                                            cat, f'{name} / {cat}'))
+        return out
 
     def canonical_url(self, url):
         url = super().canonical_url(url).split('?')[0]

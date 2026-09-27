@@ -33,7 +33,7 @@ def _m(code, pref, ja, en, slug, tier):
 MUNICIPALITIES: list[Municipality] = [
     # --- core: Chuo Line corridor and western Tokyo ---
     _m('13114', 'Tokyo', '中野区', 'Nakano', 'nakano-ku', 'core'),
-    _m('13115', 'Tokyo', '杉並区', 'Suginami', 'suginami-ku', 'core'),     # Koenji, Asagaya, Ogikubo, Nishi-Ogikubo
+    _m('13115', 'Tokyo', '杉並区', 'Suginami', 'suginami-ku', 'core'),     # SUUMO: Koenji station pages only (see portals.py)
     _m('13203', 'Tokyo', '武蔵野市', 'Musashino', 'musashino-city', 'core'),  # Kichijoji, Mitaka stn north
     _m('13204', 'Tokyo', '三鷹市', 'Mitaka', 'mitaka-city', 'core'),
     _m('13210', 'Tokyo', '小金井市', 'Koganei', 'koganei-city', 'core'),
@@ -45,8 +45,8 @@ MUNICIPALITIES: list[Municipality] = [
     _m('13120', 'Tokyo', '練馬区', 'Nerima', 'nerima-ku', 'core'),
     # --- core: Greater Kamakura ---
     _m('14204', 'Kanagawa', '鎌倉市', 'Kamakura', 'kamakura-city', 'core'),  # incl. Kita-Kamakura, Ofuna
-    _m('14208', 'Kanagawa', '逗子市', 'Zushi', 'zushi-city', 'core'),
-    _m('14301', 'Kanagawa', '葉山町', 'Hayama', 'hayama-town', 'core'),
+    _m('14208', 'Kanagawa', '逗子市', 'Zushi', 'zushi-city', 'fringe'),   # dropped from core 27 Sep 2026 (Thomas)
+    _m('14301', 'Kanagawa', '葉山町', 'Hayama', 'hayama-town', 'fringe'),
     # --- tokyo: rest of the 23 wards ---
     _m('13101', 'Tokyo', '千代田区', 'Chiyoda', 'chiyoda-ku', 'tokyo'),
     _m('13102', 'Tokyo', '中央区', 'Chuo', 'chuo-ku', 'tokyo'),

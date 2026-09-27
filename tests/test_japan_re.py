@@ -141,6 +141,12 @@ class SourceTests(unittest.TestCase):
         urls = [t.url for t in s.search_targets(areas.select('core', ['Musashino', 'Hayama']), ('detached_house', 'land'))]
         self.assertIn('https://suumo.jp/chukoikkodate/tokyo/sc_musashino/', urls)
         self.assertIn('https://suumo.jp/tochi/kanagawa/sc_miuragun/', urls)
+        urls = [t.url for t in s.search_targets(areas.select('core', ['Suginami', 'Kamakura']), ('detached_house',))]
+        self.assertEqual(urls, ['https://suumo.jp/chukoikkodate/tokyo/ek_13930/',
+                                'https://suumo.jp/chukoikkodate/tokyo/ek_19470/',
+                                'https://suumo.jp/chukoikkodate/tokyo/ek_31910/',
+                                'https://suumo.jp/chukoikkodate/kanagawa/ek_08890/',
+                                'https://suumo.jp/chukoikkodate/kanagawa/ek_11100/'])
         # the JJ012FC001 search form is disallowed for all agents
         robots = RobotsRules.parse('User-agent: *\nDisallow: /jj/bukken/ichiran/JJ012FC001/\n')
         self.assertTrue(all(robots.allowed(u.replace('https://suumo.jp', '')) for u in urls))
@@ -382,7 +388,8 @@ class LeadsTests(unittest.TestCase):
         self.assertEqual(leads.locate(r, {'高円寺': 12})[:2], ('Koenji', 'primary'))
         self.assertEqual(leads.locate(r, {'高円寺': 31}), (None, None, None))      # 30-min hard limit
         self.assertEqual(leads.locate(r, {'西荻窪': 5, '吉祥寺': 25})[:2], ('Kichijoji', 'primary'))
-        self.assertEqual(leads.locate(r, {'西荻窪': 5})[:2], ('Nishi-Ogikubo', 'secondary'))
+        self.assertEqual(leads.locate(r, {'西荻窪': 5}), (None, None, None))         # Suginami dropped
+        self.assertEqual(leads.locate(r, {'東中野': 5})[:2], ('Higashi-Nakano', 'secondary'))
         self.assertEqual(leads.locate(r, {'浜田山': 5}), (None, None, None))
         # listing names only an Enoden stop, but the pin is ~1 km from Kamakura station
         near = self.row(lat=35.3120, lng=139.5420)
