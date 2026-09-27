@@ -29,6 +29,28 @@ def _compact(d: dict) -> dict:
     return {k: v for k, v in d.items() if v is not None}
 
 
+DESC_MAX = 1200
+BOILERPLATE = ('連絡希望時間', '※電話番号に紐づくLINE')
+
+
+def _extras(conn, property_id) -> dict:
+    """Every source's link, the agency phone and the longest description, so the page
+    carries enough to judge a listing without opening the portal."""
+    rows = conn.execute('SELECT source_id, url, agency_name, agency_phone, description_ja FROM listings '
+                        "WHERE property_id = ? ORDER BY source_id = 'suumo', id", (property_id,)).fetchall()
+    links = [{'source': r['source_id'], 'url': r['url']} for r in rows if r['url']]
+    phone = next((r['agency_phone'] for r in rows if r['agency_phone']), None)
+    desc = max((r['description_ja'] or '' for r in rows), key=len)
+    for b in BOILERPLATE:
+        i = desc.find(b)
+        if i != -1:
+            desc = desc[i:].split('。', 1)[-1] if i < 5 else desc[:i]
+    desc = ' '.join(desc.split())
+    if len(desc) > DESC_MAX:
+        desc = desc[:DESC_MAX] + '…'
+    return _compact({'links': links, 'agency_phone': phone, 'description_ja': desc or None})
+
+
 def build(conn) -> dict:
     rows = conn.execute("SELECT * FROM v_properties WHERE status = 'active' AND in_scope = 1 "
                         'AND price_jpy IS NOT NULL AND price_jpy <= ?', (HARD_MAX,)).fetchall()
@@ -37,7 +59,7 @@ def build(conn) -> dict:
         r = dict(row)
         area, tier, station = leads.locate(r, leads._stations(conn, r['property_id']))
         p = {k: r[k] for k in KEYS}
-        p.update(area=area, tier=tier, main_station=station)
+        p.update(area=area, tier=tier, main_station=station, **_extras(conn, r['property_id']))
         props.append(_compact(p))
     found = leads.find(conn)
     lead_rows = [_compact({k: v for k, v in x.items() if k not in ('thumbnail_url',)})

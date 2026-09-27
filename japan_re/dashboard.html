@@ -92,6 +92,8 @@ svg.map .stext{fill:var(--muted);font:11px var(--mono)}
 .ind span b{color:var(--ink);font-weight:700}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--grey)}
 .dot.g{background:var(--good)}.dot.y{background:var(--warn)}.dot.r{background:var(--bad)}
+.desc summary{cursor:pointer;font-size:12px;color:var(--ai)}
+.desc p{margin:6px 0 0;line-height:1.7;max-width:70ch}
 .foot{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--muted)}
 .more{justify-self:center;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 16px;cursor:pointer}
 .empty{padding:24px;text-align:center;color:var(--muted);background:var(--panel);border:1px dashed var(--line);border-radius:10px}
@@ -158,6 +160,7 @@ svg.map .stext{fill:var(--muted);font:11px var(--mono)}
 const D = /*__DATA__*/null;
 const TYPE = {detached_house:['House','一戸建て'],traditional_house:['Traditional house','日本家屋'],kominka:['Kominka','古民家'],machiya:['Machiya','町家'],land:['Land','土地'],entire_building:['Whole building','一棟'],mixed_use:['Shop + home','店舗付住宅'],condominium:['Apartment','マンション'],other:['Other','その他']};
 const COND = {move_in_ready:['Move-in ready','即入居可'],minor_renovation:['Light refresh','軽微な改修'],major_renovation:['Major renovation','大規模改修'],full_renovation:['Full renovation','全面改修'],derelict_rebuild:['Rebuild / land value','建替え前提'],unknown:['Unknown','不明']};
+const SRC = {suumo:'SUUMO',real_kamakura:'Real Kamakura',real_tokyo:'Real Tokyo',ieichiba:'Ieichiba'};
 const AREA_JA = Object.fromEntries(D.stations.map(s=>[s.area,s.ja]));
 const PRIMARY = D.stations.filter(s=>s.tier==='primary').map(s=>s.area);
 const REGIONS = [
@@ -309,10 +312,11 @@ function card(p){
     <div class="jp">${esc(p.title_ja||'')}${p.address_ja?` ／ ${esc(p.address_ja)}`:''}${p.condition_evidence?` ／ ${esc(p.condition_evidence)}`:''}</div>
     <div class="tags">${tags.join('')}</div>
     ${ind}
-    <div class="foot"><span>#${p.property_id}</span>${p.price_per_m2_land?`<span class="num">¥${Math.round(p.price_per_m2_land/1e3).toLocaleString('en')}k/m² land</span>`:''}${p.est_acquisition_cost_jpy?`<span>Est. all-in purchase ${yen(p.est_acquisition_cost_jpy)}</span>`:''}${src?`<span>via ${esc(src)}</span>`:''}${p.agency_name?`<span class="jp">${esc(p.agency_name)}</span>`:''}${p.primary_url?`<a href="${esc(p.primary_url)}" target="_blank" rel="noopener">Open listing ↗</a>`:''}${p.lat?`<a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}" target="_blank" rel="noopener">Google Maps ↗</a>`:''}</div>
+    ${p.description_ja?`<details class="desc"><summary>Full listing text (Japanese)</summary><p class="jp">${esc(p.description_ja)}</p></details>`:''}
+    <div class="foot"><span>#${p.property_id}</span>${p.price_per_m2_land?`<span class="num">¥${Math.round(p.price_per_m2_land/1e3).toLocaleString('en')}k/m² land</span>`:''}${p.est_acquisition_cost_jpy?`<span>Est. all-in purchase ${yen(p.est_acquisition_cost_jpy)}</span>`:''}${src?`<span>via ${esc(src)}</span>`:''}${p.agency_name?`<span class="jp">${esc(p.agency_name)}</span>`:''}${p.agency_phone?`<span>Agent <span class="num" style="user-select:all">${esc(p.agency_phone)}</span></span>`:''}${(p.links||[{source:'listing',url:p.primary_url}]).filter(l=>l.url).map(l=>`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(SRC[l.source]||l.source)} ↗</a>`).join('')}${p.lat?`<a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}" target="_blank" rel="noopener">Google Maps ↗</a>`:''}</div>
   </article>`;
 }
-$('cards').onclick=e=>{if(e.target.closest('a')) return; const c=e.target.closest('.card'); if(c) select(+c.dataset.id,false);};
+$('cards').onclick=e=>{if(e.target.closest('a,details')) return; const c=e.target.closest('.card'); if(c) select(+c.dataset.id,false);};
 $('cards').onkeydown=e=>{if(e.key==='Enter'){const c=e.target.closest('.card'); if(c) select(+c.dataset.id,false);}};
 
 function median(a){if(!a.length) return null; const s=[...a].sort((x,y)=>x-y), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2;}
