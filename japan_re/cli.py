@@ -236,9 +236,26 @@ def cmd_events(conn, a):
         print(f'{e["observed_at"][:10]} {e["event_type"]:<13} #{e["property_id"]:<6} {e["municipality"]:<12} {extra}')
 
 
+def cmd_mark(conn, a):
+    """Record that a property was checked: seen, liked (also a favorite) or passed."""
+    if a.state == 'clear':
+        conn.execute('DELETE FROM reviews WHERE property_id IN (%s)' % ','.join('?' * len(a.property_id)),
+                     a.property_id)
+    for pid in a.property_id if a.state != 'clear' else ():
+        conn.execute('INSERT OR REPLACE INTO reviews VALUES (?,?,?,?)', (pid, a.state, db.now(), a.note))
+        if a.state == 'liked':
+            conn.execute('INSERT OR IGNORE INTO favorites VALUES (?,?,?)', (pid, db.now(), a.note))
+    conn.commit()
+    for r in conn.execute('SELECT * FROM reviews ORDER BY reviewed_at DESC LIMIT 20'):
+        print(f'#{r["property_id"]:<6} {r["state"]:<7} {r["reviewed_at"][:10]}  {r["note"] or ""}')
+
+
 def cmd_leads(conn, a):
     from . import leads
-    found = leads.find(conn, areas=a.area, include_secondary=not a.primary_only, max_price=a.max_price)
+    found = leads.find(conn, areas=a.area, include_secondary=not a.primary_only, max_price=a.max_price,
+                       include_passed=a.show_passed)
+    if a.unchecked:
+        found = [L for L in found if not L.review]
     if not a.watchlist:
         found = [L for L in found if L.is_lead or a.out]
     if a.out:
@@ -253,7 +270,7 @@ def cmd_leads(conn, a):
     for L in found[:a.limit]:
         r = L.row
         dots = ''.join(d for d, _ in L.indicators.values())
-        tag = '' if L.is_lead else ' [watchlist]'
+        tag = ('' if L.is_lead else ' [watchlist]') + (f' [{L.review}]' if L.review else '')
         print(f'#{r["property_id"]:<6} {dots} {", ".join(L.categories)}{tag}')
         print(f'        {L.reason}')
         print(f'        {r["primary_url"]}')
@@ -369,7 +386,15 @@ def main(argv=None):
     p.add_argument('--limit', type=int, default=60)
     p.add_argument('--out', help='write the whole Leads page (leads + watchlist) here')
     p.add_argument('--format', choices=['md', 'json'], default='md')
+    p.add_argument('--unchecked', action='store_true', help='only leads not yet marked seen/liked/passed')
+    p.add_argument('--show-passed', action='store_true', help='include the ones marked passed')
     p.set_defaults(fn=cmd_leads)
+
+    p = sub.add_parser('mark', help='mark properties as seen, liked or passed (clear to undo)')
+    p.add_argument('state', choices=['seen', 'liked', 'passed', 'clear'])
+    p.add_argument('property_id', type=int, nargs='+')
+    p.add_argument('--note')
+    p.set_defaults(fn=cmd_mark)
 
     p = sub.add_parser('export', help='write v_properties to CSV or JSON')
     p.add_argument('--format', choices=['csv', 'json'], default='csv')

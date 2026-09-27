@@ -72,6 +72,8 @@ class Lead:
     area: str | None
     tier: str | None                      # 'primary' | 'secondary'
     station: str | None = None            # 'Kichijoji, 12 min walk'
+    review: str | None = None             # seen | liked | passed
+    review_note: str | None = None
     indicators: dict[str, tuple[str, str]] = field(default_factory=dict)   # name -> (dot, text)
     signals: list[str] = field(default_factory=list)
     categories: list[str] = field(default_factory=list)
@@ -316,7 +318,7 @@ CATEGORY_ORDER = ('New Leads', 'Renovation Opportunities', 'Land Opportunities',
 
 
 def find(conn, areas: list[str] | None = None, include_secondary: bool = True,
-         max_price: int = HARD_MAX) -> list[Lead]:
+         max_price: int = HARD_MAX, include_passed: bool = False) -> list[Lead]:
     """Every active property under the cap in the chosen areas, assessed. Leads and
     watchlist entries both come back; `is_lead` tells them apart."""
     max_price = min(max_price, HARD_MAX)
@@ -324,6 +326,7 @@ def find(conn, areas: list[str] | None = None, include_secondary: bool = True,
         f"SELECT * FROM v_properties WHERE status = 'active' AND price_jpy IS NOT NULL AND price_jpy <= ? "
         f"AND property_type IN ({','.join('?' * len(TYPES))})", (max_price, *TYPES)).fetchall()
     medians = land_medians(conn)
+    reviews = {x['property_id']: (x['state'], x['note']) for x in conn.execute('SELECT * FROM reviews')}
     first = conn.execute('SELECT MIN(first_seen) FROM listings').fetchone()[0] or ''
     week_ago = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=7)).isoformat()
     new_since = week_ago if first < week_ago else None   # 'new' means nothing in week one
@@ -337,9 +340,16 @@ def find(conn, areas: list[str] | None = None, include_secondary: bool = True,
             continue
         text = _text(r) + ' ' + _listing_text(conn, r['property_id'])
         L = assess(r, area, tier, medians, new_since, text, station)
+        rv = reviews.get(r['property_id'])
+        if rv:
+            L.review, L.review_note = rv
+        if L.review == 'passed' and not include_passed:
+            continue
         if L.categories:
             out.append(L)
-    out.sort(key=lambda L: (not L.is_lead, L.tier != 'primary', -L.weight, L.row['price_jpy']))
+    # unchecked first within each list, so what is left to look at is on top
+    out.sort(key=lambda L: (not L.is_lead, L.review == 'passed', L.review in ('seen', 'liked'),
+                            L.tier != 'primary', -L.weight, L.row['price_jpy']))
     return out
 
 
@@ -355,7 +365,10 @@ def card(L: Lead) -> list[str]:
     title = f'¥{r["price_jpy"] / 1e6:,.1f}M — {TYPE_EN.get(r["property_type"], "Property")} — {L.area}'
     if L.indicators['Price'][0] != GREEN:
         title += ' (above ideal budget)'
-    lines = [f'### {title}', '']
+    mark = {'seen': ' · ✓ seen', 'liked': ' · ♥ liked', 'passed': ' · ✗ passed'}.get(L.review, ' · ○ not checked yet')
+    lines = [f'### {title}{mark}', '']
+    if L.review_note:
+        lines += [f'_Your note: {L.review_note}_', '']
     facts = []
     if r['land_area_m2'] and r['property_type'] != 'condominium':
         facts.append(f'Land: {r["land_area_m2"]:,.0f} m²')
@@ -382,8 +395,9 @@ def card(L: Lead) -> list[str]:
 
 def to_markdown(found: list[Lead]) -> str:
     leads = [L for L in found if L.is_lead]
+    unchecked = sum(1 for L in leads if not L.review)
     out = [f'# Leads · {dt.date.today():%d %b %Y}', '',
-           f'{len(leads)} leads and {len(found) - len(leads)} on the watchlist. Hard limits: ¥70M and a 30-minute walk from a main station; ¥50M or less '
+           f'{len(leads)} leads ({unchecked} not checked yet) and {len(found) - len(leads)} on the watchlist. Hard limits: ¥70M and a 30-minute walk from a main station; ¥50M or less '
            'preferred. Ranked by land, ownership, character, age, location and renovation potential. '
            'Indicator order: Price, Land, Age, Renovation, Location, Traditional character, Freehold '
            '(🟢 good · 🟡 so-so · 🔴 against · ⚪ unknown).', '']
@@ -405,7 +419,8 @@ def to_json(found: list[Lead]) -> list[dict]:
     keys = ('property_id', 'price_jpy', 'property_type', 'municipality', 'land_area_m2', 'building_area_m2',
             'year_built', 'condition', 'land_rights', 'nearest_station', 'station_walk_min', 'lat', 'lng',
             'primary_url', 'sources', 'first_seen', 'title_ja', 'title_en', 'thumbnail_url')
-    return [dict({k: L.row.get(k) for k in keys}, area=L.area, area_tier=L.tier, main_station=L.station, is_lead=L.is_lead,
+    return [dict({k: L.row.get(k) for k in keys}, area=L.area, area_tier=L.tier, main_station=L.station,
+                 review=L.review, review_note=L.review_note, is_lead=L.is_lead,
                  categories=L.categories, reason=L.reason, weight=L.weight,
                  indicators={k: {'dot': d, 'text': t} for k, (d, t) in L.indicators.items()})
             for L in found]

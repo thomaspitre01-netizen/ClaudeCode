@@ -201,6 +201,15 @@ CREATE TABLE IF NOT EXISTS favorites (
     note         TEXT
 );
 
+-- What Thomas has already looked at: seen (checked), liked (also a favorite) or
+-- passed (not for me: hidden from Leads). One row per property, latest wins.
+CREATE TABLE IF NOT EXISTS reviews (
+    property_id  INTEGER PRIMARY KEY REFERENCES properties(id) ON DELETE CASCADE,
+    state        TEXT NOT NULL CHECK (state IN ('seen', 'liked', 'passed')),
+    reviewed_at  TEXT NOT NULL,
+    note         TEXT
+);
+
 CREATE TABLE IF NOT EXISTS geocode_cache (
     query        TEXT PRIMARY KEY,
     lat          REAL,

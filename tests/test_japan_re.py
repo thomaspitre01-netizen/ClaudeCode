@@ -420,5 +420,19 @@ class LeadsTests(unittest.TestCase):
         self.assertNotEqual(n.classify_type('detached_house', '家', '「湘南町屋」駅 徒歩5分')[0], 'machiya')
 
 
+class ReviewTests(unittest.TestCase):
+    def test_mark_seen_liked_passed(self):
+        from japan_re import cli
+        with tempfile.TemporaryDirectory() as d:
+            conn = db.connect(Path(d) / 't.sqlite')
+            conn.execute("INSERT INTO properties (id, created_at, updated_at) VALUES (1, 'x', 'x'), (2, 'x', 'x')")
+            cli.cmd_mark(conn, type('A', (), dict(state='liked', property_id=[1], note='big garden'))())
+            cli.cmd_mark(conn, type('A', (), dict(state='passed', property_id=[2], note=None))())
+            self.assertEqual(conn.execute('SELECT state FROM reviews WHERE property_id = 1').fetchone()[0], 'liked')
+            self.assertEqual(conn.execute('SELECT note FROM favorites WHERE property_id = 1').fetchone()[0], 'big garden')
+            cli.cmd_mark(conn, type('A', (), dict(state='clear', property_id=[2], note=None))())
+            self.assertIsNone(conn.execute('SELECT 1 FROM reviews WHERE property_id = 2').fetchone())
+
+
 if __name__ == '__main__':
     unittest.main()

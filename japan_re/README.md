@@ -44,6 +44,7 @@ python -m japan_re leads --area Koenji --watchlist
 python -m japan_re leads --out leads.md   # the whole Leads page: cards, indicators, categories, watchlist
 python -m japan_re leads --out leads.json --format json   # the same for the dashboard
 python -m japan_re show 123               # one property: all sources, price history, JA + EN text
+python -m japan_re mark seen 123 124       # checked it; 'liked' also makes it a favorite, 'passed' hides it from Leads
 python -m japan_re fav add 123 --note "big garden"
 python -m japan_re reno 123 --low 35M --high 50M     # prints acquisition + renovation = total
 python -m japan_re events --days 7        # new listings, price cuts, removals: what alerts will send
