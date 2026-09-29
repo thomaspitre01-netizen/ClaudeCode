@@ -1,0 +1,366 @@
+<title>Chuo–Kamakura Property Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#F3F4EF;--panel:#FFFFFF;--ink:#1C2320;--muted:#5C6660;--line:#D8DCD4;--soft:#E9ECE5;
+  --ai:#27467B;--ai-soft:#E3E9F3;--kaki:#C0532A;--kaki-soft:#F6E4DA;
+  --chuo:#F15A22;--yoko:#0F6CB6;--good:#2B7A4B;--warn:#A86E12;--bad:#AE3A2D;--grey:#8A938D;
+  --serif:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+  --sans:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+  --paper:#111614;--panel:#19201D;--ink:#E5E9E3;--muted:#99A49D;--line:#2C3531;--soft:#212925;
+  --ai:#93AEDC;--ai-soft:#233047;--kaki:#E3845C;--kaki-soft:#3A261D;--good:#6DC18F;--warn:#E0B45C;--bad:#E57B6E;--grey:#76807A}}
+:root[data-theme="dark"]{color-scheme:dark;
+  --paper:#111614;--panel:#19201D;--ink:#E5E9E3;--muted:#99A49D;--line:#2C3531;--soft:#212925;
+  --ai:#93AEDC;--ai-soft:#233047;--kaki:#E3845C;--kaki-soft:#3A261D;--good:#6DC18F;--warn:#E0B45C;--bad:#E57B6E;--grey:#76807A}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:14px/1.55 var(--sans);padding-inline:16px;padding-block:0 40px}
+.wrap{max-width:1320px;margin:0 auto}
+a{color:var(--ai)}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ai);outline-offset:2px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-block:22px 14px;border-bottom:1px solid var(--line)}
+h1{font:700 26px/1.2 var(--serif);margin:0;text-wrap:balance}
+h1 small{display:block;font:400 12px/1.4 var(--sans);color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.tabs{display:flex;gap:4px;background:var(--soft);padding:4px;border-radius:8px}
+.tabs button{border:0;background:none;padding:6px 14px;border-radius:6px;cursor:pointer;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.stats{display:flex;flex-wrap:wrap;gap:8px 28px;padding-block:14px;color:var(--muted);font-size:13px}
+.stats b{display:block;font:500 20px/1.2 var(--mono);color:var(--ink)}
+.grid{display:grid;grid-template-columns:260px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+aside{position:sticky;top:env(safe-area-inset-top,0px);display:grid;gap:16px;padding-block:4px}
+@media (max-width:860px){aside{position:static}}
+aside details summary{cursor:pointer;font-weight:700;display:none}
+@media (max-width:860px){aside details summary{display:block;padding-block:6px}}
+.fgroup{display:grid;gap:6px}
+.fgroup>label,.fgroup>.lab{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:3px 10px;cursor:pointer;font-size:13px}
+.chip[aria-pressed="true"]{background:var(--ai);border-color:var(--ai);color:var(--panel)}
+.chip .ja{opacity:.7;margin-left:4px;font-size:11px}
+input[type=range]{width:100%;accent-color:var(--ai)}
+input[type=search],select{width:100%;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 8px}
+.row{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.check{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}
+.reset{justify-self:start;border:0;background:none;color:var(--ai);cursor:pointer;padding:0;text-decoration:underline}
+main{display:grid;gap:16px;min-width:0}
+.mapbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.maphead{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted)}
+.maphead .tabs{padding:3px}
+.maphead .tabs button{padding:3px 10px;font-size:13px}
+.legend{display:flex;gap:14px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+svg.map{display:block;width:100%;height:auto;max-height:520px;background:var(--paper)}
+svg.map .ring{fill:var(--ai);fill-opacity:.05;stroke:var(--ai);stroke-opacity:.35;stroke-dasharray:4 4}
+svg.map .ring.sec{stroke-opacity:.18;fill-opacity:.02}
+svg.map .stn{fill:var(--panel);stroke:var(--ink);stroke-width:2}
+svg.map .slab{fill:var(--ink);font:700 13px var(--sans);paint-order:stroke;stroke:var(--paper);stroke-width:4px}
+svg.map .slab tspan.ja{font:600 12px var(--serif);fill:var(--muted)}
+svg.map .pt{cursor:pointer;stroke:var(--panel);stroke-width:1.2}
+svg.map .pt.p{fill:var(--ai)}
+svg.map .pt.l{fill:var(--kaki)}
+svg.map .pt.sel{stroke:var(--ink);stroke-width:3}
+svg.map .scale{stroke:var(--muted);stroke-width:2}
+svg.map .stext{fill:var(--muted);font:11px var(--mono)}
+.note{padding:8px 12px;font-size:12px;color:var(--muted);border-top:1px solid var(--line)}
+.listhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
+.listhead h2{font:700 18px var(--serif);margin:0}
+.listhead select{width:auto}
+.cards{display:grid;gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:8px;cursor:pointer}
+.card.sel{border-color:var(--ai);box-shadow:0 0 0 2px var(--ai-soft)}
+.card.lead{border-left:4px solid var(--kaki)}
+.top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;align-items:baseline}
+.price{font:500 19px var(--mono)}
+.price small{font:400 13px var(--serif);color:var(--muted);margin-left:8px}
+.drop{color:var(--good);font-size:12px;margin-left:6px}
+.where{color:var(--muted);font-size:13px}
+.en{font-weight:700}
+.jp{font-family:var(--serif);color:var(--muted);font-size:13px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:12px;border-radius:4px;padding:1px 7px;background:var(--soft);color:var(--ink)}
+.tag.bad{background:var(--kaki-soft);color:var(--bad)}
+.tag.cat{background:var(--kaki-soft);color:var(--kaki);font-weight:700}
+.tag.rv{background:var(--ai-soft);color:var(--ai)}
+.reason{margin:0}
+.ind{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 16px;font-size:12px;color:var(--muted)}
+.ind span b{color:var(--ink);font-weight:700}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:var(--grey)}
+.dot.g{background:var(--good)}.dot.y{background:var(--warn)}.dot.r{background:var(--bad)}
+.photos{display:flex;gap:6px;overflow-x:auto}
+.photos img{height:150px;width:auto;max-width:none;border-radius:6px;flex:none}
+.contact{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:baseline;font-size:13px;background:var(--soft);border-radius:6px;padding:8px 10px}
+.contact small{color:var(--muted)}
+.sel-all{user-select:all}
+.desc summary{cursor:pointer;font-size:12px;color:var(--ai)}
+.desc p{margin:6px 0 0;line-height:1.7;max-width:70ch}
+.foot{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--muted)}
+.more{justify-self:center;border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 16px;cursor:pointer}
+.empty{padding:24px;text-align:center;color:var(--muted);background:var(--panel);border:1px dashed var(--line);border-radius:10px}
+@media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s,box-shadow .15s}}
+</style>
+
+<div class="wrap">
+<header>
+  <h1><small>Private property board · 物件ボード</small>Chuo Line &amp; Kamakura homes</h1>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-leads" aria-selected="true">Leads</button>
+    <button role="tab" id="tab-all" aria-selected="false">All properties</button>
+  </div>
+</header>
+<div class="stats" id="stats"></div>
+<div class="grid">
+  <aside>
+    <details id="fwrap" open>
+      <summary>Filters</summary>
+      <div style="display:grid;gap:16px;padding-top:4px">
+        <div class="fgroup"><label for="q">Search</label><input type="search" id="q" placeholder="鎌倉, 古民家, 4LDK…"></div>
+        <div class="fgroup"><span class="lab">Area (30 min walk of the station)</span><div class="chips" id="areas"></div></div>
+        <div class="fgroup"><label for="price">Max price</label><input type="range" id="price" min="10" max="150" step="5"><div class="row"><b class="num" id="pricev"></b><span>up to ¥150M</span></div></div>
+        <div class="fgroup"><label for="walk">Max walk to nearest station</label><input type="range" id="walk" min="5" max="30" step="1"><div class="row"><b class="num" id="walkv"></b><span>up to 30 min</span></div></div>
+        <div class="fgroup"><label for="land">Min land</label><input type="range" id="land" min="0" max="300" step="10"><div class="row"><b class="num" id="landv"></b><span>up to 300 m²</span></div></div>
+        <div class="fgroup"><span class="lab">Type</span><div class="chips" id="types"></div></div>
+        <div class="fgroup"><span class="lab">Condition</span><div class="chips" id="conds"></div></div>
+        <div class="fgroup" id="catwrap"><span class="lab">Lead category</span><div class="chips" id="cats"></div></div>
+        <label class="check"><input type="checkbox" id="freehold"> Freehold only (所有権)</label>
+        <label class="check" id="watchwrap"><input type="checkbox" id="watch"> Include watchlist</label>
+        <button class="reset" id="reset">Reset filters</button>
+      </div>
+    </details>
+  </aside>
+  <main>
+    <section class="mapbox" aria-label="Map">
+      <div class="maphead">
+        <div class="tabs" id="regions"></div>
+        <div class="legend"><span><i style="background:var(--kaki)"></i>Lead</span><span><i style="background:var(--ai)"></i>Other listing</span><span><i style="border:1px dashed var(--ai)"></i>30-min walk</span></div>
+      </div>
+      <svg class="map" id="map" role="img" aria-label="Listings around the main stations"></svg>
+      <div class="note" id="mapnote"></div>
+    </section>
+    <section style="display:grid;gap:10px">
+      <div class="listhead"><h2 id="listtitle"></h2>
+        <select id="sort" aria-label="Sort">
+          <option value="weight">Best leads first</option>
+          <option value="price">Price, low to high</option>
+          <option value="-price">Price, high to low</option>
+          <option value="m2">¥ per m² of land</option>
+          <option value="land">Largest land</option>
+          <option value="walk">Shortest walk</option>
+          <option value="new">Newest</option>
+        </select>
+      </div>
+      <div class="cards" id="cards"></div>
+      <button class="more" id="more" hidden>Show more</button>
+    </section>
+  </main>
+</div>
+</div>
+
+<script>
+const D = /*__DATA__*/null;
+const TYPE = {detached_house:['House','一戸建て'],traditional_house:['Traditional house','日本家屋'],kominka:['Kominka','古民家'],machiya:['Machiya','町家'],land:['Land','土地'],entire_building:['Whole building','一棟'],mixed_use:['Shop + home','店舗付住宅'],condominium:['Apartment','マンション'],other:['Other','その他']};
+const COND = {move_in_ready:['Move-in ready','即入居可'],minor_renovation:['Light refresh','軽微な改修'],major_renovation:['Major renovation','大規模改修'],full_renovation:['Full renovation','全面改修'],derelict_rebuild:['Rebuild / land value','建替え前提'],unknown:['Unknown','不明']};
+const SRC = {suumo:'SUUMO',real_kamakura:'Real Kamakura',real_tokyo:'Real Tokyo',ieichiba:'Ieichiba'};
+const AREA_JA = Object.fromEntries(D.stations.map(s=>[s.area,s.ja]));
+const PRIMARY = D.stations.filter(s=>s.tier==='primary').map(s=>s.area);
+const REGIONS = [
+  {id:'chuo',name:'Chuo Line',ja:'中央線',areas:['Kichijoji','Mitaka','Koenji','Nakano','Higashi-Nakano','Shin-Nakano'],rail:['Mitaka','Kichijoji','Koenji','Nakano','Higashi-Nakano'],line:'var(--chuo)'},
+  {id:'kama',name:'Kamakura',ja:'鎌倉',areas:['Kamakura','Kita-Kamakura'],rail:['Kita-Kamakura','Kamakura'],line:'var(--yoko)'},
+];
+const byId = new Map(D.properties.map(p=>[p.property_id,p]));
+const leadById = new Map(D.leads.map(l=>[l.property_id,l]));
+const PAGE = 40;
+const defaults = () => ({tab:'leads',q:'',areas:new Set(PRIMARY),price:150,walk:30,land:0,types:new Set(),conds:new Set(),cats:new Set(),freehold:false,watch:false,sort:'weight',region:'chuo',sel:null,shown:PAGE});
+let S = defaults();
+try{const t=localStorage.getItem('jre-tab'); if(t==='all'||t==='leads'){S.tab=t; if(t==='all') S.sort='price';}}catch(e){}
+if(location.hash==='#all'){S.tab='all';S.sort='price';}
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const yen = n => n==null?'–':'¥'+(n>=1e8?(n/1e8).toFixed(2).replace(/0$/,'')+'億':(n/1e6).toFixed(1)+'M');
+const man = n => n==null?'':(n/1e4).toLocaleString('en')+'万円';
+const tsubo = m => (m/3.30579).toFixed(1)+'坪';
+
+function merged(l){ return Object.assign({}, byId.get(l.property_id)||{}, l); }
+function rows(){
+  const base = S.tab==='leads' ? D.leads.filter(l=>S.watch||l.is_lead).map(merged) : D.properties.map(p=>leadById.has(p.property_id)?Object.assign({},p,{lead:leadById.get(p.property_id)}):p);
+  const q = S.q.trim().toLowerCase();
+  return base.filter(p=>{
+    const areaKey = p.area||'Elsewhere';
+    if(!S.areas.has(areaKey)) return false;
+    if(p.price_jpy>S.price*1e6) return false;
+    if(S.walk<30 && (p.station_walk_min==null||p.station_walk_min>S.walk)) return false;
+    if(S.land && !(p.land_area_m2>=S.land)) return false;
+    if(S.types.size && !S.types.has(p.property_type)) return false;
+    if(S.conds.size && !S.conds.has(p.condition||'unknown')) return false;
+    if(S.freehold && p.land_rights!=='freehold') return false;
+    if(S.tab==='leads' && S.cats.size && !(p.categories||[]).some(c=>S.cats.has(c))) return false;
+    if(q){const hay=[p.title_ja,p.address_ja,p.neighborhood_ja,p.municipality,p.municipality_ja,p.area,p.layout_ja,p.reason,p.condition_evidence,p.nearest_station,(TYPE[p.property_type]||[]).join(' ')].join(' ').toLowerCase(); if(!hay.includes(q)) return false;}
+    return true;
+  }).sort(sorter());
+}
+function sorter(){
+  const k=S.sort, n=v=>v==null?Infinity:v;
+  return {
+    weight:(a,b)=>(b.is_lead===true)-(a.is_lead===true)||n(-(a.weight??-1e9))-n(-(b.weight??-1e9))||a.price_jpy-b.price_jpy,
+    price:(a,b)=>a.price_jpy-b.price_jpy,
+    '-price':(a,b)=>b.price_jpy-a.price_jpy,
+    m2:(a,b)=>n(a.price_per_m2_land)-n(b.price_per_m2_land),
+    land:(a,b)=>n(-a.land_area_m2)-n(-b.land_area_m2),
+    walk:(a,b)=>n(a.station_walk_min)-n(b.station_walk_min),
+    'new':(a,b)=>String(b.first_seen).localeCompare(String(a.first_seen)),
+  }[k];
+}
+
+function chipRow(el, items, set, render){
+  el.innerHTML = items.map(([v,en,ja])=>`<button class="chip" data-v="${esc(v)}" aria-pressed="${set.has(v)}">${esc(en)}${ja?`<span class="ja">${esc(ja)}</span>`:''}</button>`).join('');
+  el.onclick = e=>{const b=e.target.closest('.chip'); if(!b) return; const v=b.dataset.v; set.has(v)?set.delete(v):set.add(v); b.setAttribute('aria-pressed',set.has(v)); S.shown=PAGE; render();};
+}
+function setupFilters(){
+  const all = D.properties.concat(D.leads);
+  const count = (f)=>{const m={}; all.forEach(p=>{const k=f(p); m[k]=(m[k]||0)+1}); return m;};
+  const areas = D.stations.map(s=>[s.area,s.area,s.ja]).concat([['Elsewhere','Elsewhere','その他']]);
+  chipRow($('areas'), areas, S.areas, update);
+  const tc=count(p=>p.property_type);
+  chipRow($('types'), Object.keys(TYPE).filter(t=>tc[t]).map(t=>[t,TYPE[t][0],TYPE[t][1]]), S.types, update);
+  chipRow($('conds'), Object.keys(COND).map(c=>[c,COND[c][0],COND[c][1]]), S.conds, update);
+  const cats=[...new Set(D.leads.flatMap(l=>l.categories||[]))];
+  chipRow($('cats'), cats.map(c=>[c,c.replace(' Opportunities','').replace(' Properties','')]), S.cats, update);
+  $('q').value=S.q; $('price').value=S.price; $('walk').value=S.walk; $('land').value=S.land; $('freehold').checked=S.freehold; $('watch').checked=S.watch; $('sort').value=S.sort;
+}
+$('q').oninput=e=>{S.q=e.target.value;S.shown=PAGE;update();};
+$('price').oninput=e=>{S.price=+e.target.value;S.shown=PAGE;update();};
+$('walk').oninput=e=>{S.walk=+e.target.value;S.shown=PAGE;update();};
+$('land').oninput=e=>{S.land=+e.target.value;S.shown=PAGE;update();};
+$('freehold').onchange=e=>{S.freehold=e.target.checked;update();};
+$('watch').onchange=e=>{S.watch=e.target.checked;update();};
+$('sort').onchange=e=>{S.sort=e.target.value;update();};
+$('reset').onclick=()=>{const tab=S.tab,region=S.region; S=defaults(); S.tab=tab; S.region=region; if(tab==='all') S.sort='price'; setupFilters(); update();};
+$('more').onclick=()=>{S.shown+=PAGE;update();};
+function setTab(t){S.tab=t;S.shown=PAGE;S.sort=t==='leads'?'weight':(S.sort==='weight'?'price':S.sort);try{localStorage.setItem('jre-tab',t)}catch(e){} $('sort').value=S.sort;update();}
+$('tab-leads').onclick=()=>setTab('leads'); $('tab-all').onclick=()=>setTab('all');
+
+// ---- map: an equirectangular sketch around the main stations, to scale
+function regionOf(p){ return REGIONS.find(r=>r.areas.includes(p.area)) || (p.lat&&p.lat<35.5?REGIONS[1]:p.lat?REGIONS[0]:null); }
+function geometry(reg){
+  const st = D.stations.filter(s=>reg.areas.includes(s.area));
+  const lat0 = st.reduce((a,s)=>a+s.lat,0)/st.length, k=Math.cos(lat0*Math.PI/180);
+  const rLat = D.radius_m/111320*1.08, rLng = rLat/k;
+  const minLng=Math.min(...st.map(s=>s.lng))-rLng, maxLng=Math.max(...st.map(s=>s.lng))+rLng;
+  const minLat=Math.min(...st.map(s=>s.lat))-rLat, maxLat=Math.max(...st.map(s=>s.lat))+rLat;
+  const W=1000, sc=W/((maxLng-minLng)*k), H=Math.round((maxLat-minLat)*sc);
+  return {st,W,H,sc,x:lng=>(lng-minLng)*k*sc,y:lat=>(maxLat-lat)*sc,inside:(la,ln)=>la>=minLat&&la<=maxLat&&ln>=minLng&&ln<=maxLng};
+}
+function drawMap(list){
+  const reg = REGIONS.find(r=>r.id===S.region), g=geometry(reg);
+  const rpx = D.radius_m/111320*g.sc;
+  const stns = reg.rail.map(a=>g.st.find(t=>t.area===a));
+  let s = `<polyline points="${stns.map(t=>g.x(t.lng)+','+g.y(t.lat)).join(' ')}" fill="none" stroke="${reg.line}" stroke-width="5" stroke-linecap="round" opacity=".85"/>`;
+  s += g.st.map(t=>`<circle class="ring ${t.tier==='secondary'?'sec':''}" cx="${g.x(t.lng)}" cy="${g.y(t.lat)}" r="${rpx}"/>`).join('');
+  const onMap = list.filter(p=>p.lat&&g.inside(p.lat,p.lng));
+  const pts = onMap.slice().sort((a,b)=>(a.property_id===S.sel)-(b.property_id===S.sel));
+  s += pts.map(p=>{const lead=p.is_lead||(p.lead&&p.lead.is_lead); return `<circle class="pt ${lead?'l':'p'} ${p.property_id===S.sel?'sel':''}" data-id="${p.property_id}" cx="${g.x(p.lng).toFixed(1)}" cy="${g.y(p.lat).toFixed(1)}" r="${p.property_id===S.sel?9:6}"><title>${esc(yen(p.price_jpy)+' · '+(TYPE[p.property_type]||['Property'])[0]+' · '+(p.title_ja||''))}</title></circle>`}).join('');
+  s += g.st.map(t=>`<circle class="stn" cx="${g.x(t.lng)}" cy="${g.y(t.lat)}" r="6"/><text class="slab" x="${g.x(t.lng)+(g.x(t.lng)>g.W-190?-10:10)}" y="${g.y(t.lat)-10}" text-anchor="${g.x(t.lng)>g.W-190?'end':'start'}">${esc(t.area)} <tspan class="ja">${esc(t.ja)}</tspan></text>`).join('');
+  const km = g.sc*1000/111320, y0=g.H-18;
+  s += `<line class="scale" x1="20" y1="${y0}" x2="${20+km}" y2="${y0}"/><text class="stext" x="20" y="${y0-6}">1 km</text>`;
+  const svg=$('map'); svg.setAttribute('viewBox',`0 0 ${g.W} ${g.H}`); svg.innerHTML=s;
+  const off = list.length-onMap.length;
+  $('mapnote').textContent = `${onMap.length} of ${list.length} shown on this map`+(off?` · ${off} elsewhere or without a map pin`:'')+`. Rings are a ${D.walk_max}-minute walk (${(D.radius_m/1000).toFixed(2)} km straight line) from each main station. Map tiles can't load here, so this is a to-scale sketch.`;
+  $('regions').innerHTML = REGIONS.map(r=>`<button data-r="${r.id}" aria-selected="${r.id===S.region}">${r.name} <span class="jp">${r.ja}</span> <span class="num">${list.filter(p=>regionOf(p)===r).length}</span></button>`).join('');
+}
+$('regions').onclick=e=>{const b=e.target.closest('button'); if(b){S.region=b.dataset.r;drawMap(rows());}};
+$('map').onclick=e=>{const c=e.target.closest('.pt'); if(!c) return; select(+c.dataset.id,true);};
+
+function select(id,fromMap){
+  S.sel = S.sel===id&&!fromMap?null:id;
+  const list=rows(), i=list.findIndex(p=>p.property_id===id);
+  if(i>=S.shown) S.shown=Math.ceil((i+1)/PAGE)*PAGE;
+  const p=list[i]; if(p&&!fromMap){const r=regionOf(p); if(r) S.region=r.id;}
+  update();
+  if(fromMap){const el=document.querySelector(`.card[data-id="${id}"]`); el&&el.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});}
+}
+
+// ---- cards
+function english(p){
+  const t=(TYPE[p.property_type]||['Property'])[0], b=[t];
+  if(p.layout_ja) b.push(p.layout_ja);
+  if(p.building_area_m2) b.push(`${Math.round(p.building_area_m2)} m² building`);
+  if(p.land_area_m2 && p.property_type!=='condominium') b.push(`${Math.round(p.land_area_m2)} m² land (${tsubo(p.land_area_m2)})`);
+  if(p.year_built) b.push(`built ${p.year_built}`);
+  return b.join(' · ');
+}
+const DAYS = {'月':'Mon','火':'Tue','水':'Wed','木':'Thu','金':'Fri','土':'Sat','日':'Sun','祝':'holidays'};
+const closedEn = t => /なし|無休/.test(t) ? 'open every day' : 'closed '+t.replace(/毎週|曜日|曜/g,'').split(/[・、,\/]/).map(x=>x.trim()).filter(Boolean).map(x=>[...x].map(c=>DAYS[c]||c).join('')).join(', ');
+function contactBlock(c){
+  if(!c||!(c.phone||c.emails)) return '';
+  const rows=[];
+  if(c.company) rows.push(`<span class="jp">${esc(c.company)}</span>`);
+  if(c.person) rows.push(`<span>Agent <span class="jp">${esc(c.person)}</span></span>`);
+  if(c.phone) rows.push(`<span>Phone <b class="num sel-all">${esc(c.phone)}</b>${/^0120|^0800/.test(c.phone)?' <small>(freephone, Japan only)</small>':` <small>(from abroad +81 ${esc(c.phone.replace(/^0/,''))})</small>`}</span>`);
+  (c.emails||[]).forEach(e=>rows.push(`<span>Email <b class="sel-all">${esc(e)}</b></span>`));
+  if(c.hours) rows.push(`<span>Hours ${esc(c.hours)}${c.closed?`, ${esc(closedEn(c.closed))}`:''} (Japan time)</span>`);
+  return `<div class="contact"><b>Contact the agent</b>${rows.join('')}<small>Say you saw it on SUUMO (「SUUMOを見た」).</small></div>`;
+}
+const dotClass = d => ({'🟢':'g','🟡':'y','🔴':'r'}[d]||'');
+function card(p){
+  const L = S.tab==='leads'?p:p.lead, lead=L&&L.is_lead;
+  const cond = COND[p.condition||'unknown']||COND.unknown;
+  const walk = p.station_walk_min!=null?`${p.station_walk_min} min walk`:'';
+  const tags = [];
+  if(L&&L.main_category) tags.push(`<span class="tag cat">${esc(lead?L.main_category:'Watchlist')}</span>`);
+  if(L&&L.review) tags.push(`<span class="tag rv">${esc(L.review)}</span>`);
+  tags.push(`<span class="tag">${esc(cond[0])} <span class="jp">${esc(cond[1])}</span></span>`);
+  if(p.land_rights==='leasehold') tags.push(`<span class="tag bad">Leasehold 借地権</span>`);
+  else if(p.land_rights==='freehold') tags.push(`<span class="tag">Freehold 所有権</span>`);
+  if(p.rebuild_prohibited) tags.push(`<span class="tag bad">No rebuild 再建築不可</span>`);
+  const drop = p.initial_price_jpy&&p.initial_price_jpy>p.price_jpy?`<span class="drop">▼ ${yen(p.initial_price_jpy-p.price_jpy)}</span>`:'';
+  const ind = L&&L.indicators ? `<div class="ind">${Object.entries(L.indicators).map(([k,v])=>`<span><i class="dot ${dotClass(v.dot)}"></i><b>${esc(k)}</b> ${esc(v.text)}</span>`).join('')}</div>`:'';
+  const src = (p.sources||'').split(',').filter(Boolean).join(', ');
+  return `<article class="card ${lead?'lead':''} ${p.property_id===S.sel?'sel':''}" data-id="${p.property_id}" tabindex="0">
+    <div class="top"><div><span class="price num">${yen(p.price_jpy)}<small>${man(p.price_jpy)}</small></span>${drop}</div>
+      <div class="where">${esc(p.area||p.municipality||'')}${p.area?` <span class="jp">${esc(AREA_JA[p.area]||'')}</span>`:''}${p.nearest_station?` · ${esc(p.nearest_station.split(' / ').pop())} ${esc(walk)}`:''}</div></div>
+    <div class="en">${esc(english(p))}</div>
+    ${L&&L.reason?`<p class="reason">${esc(L.reason)}</p>`:''}
+    <div class="jp">${esc(p.title_ja||'')}${p.address_ja?` ／ ${esc(p.address_ja)}`:''}${p.condition_evidence?` ／ ${esc(p.condition_evidence)}`:''}</div>
+    <div class="tags">${tags.join('')}</div>
+    ${ind}
+    ${p.photos?`<div class="photos">${p.photos.map((d,i)=>`<img src="${d}" alt="Photo ${i+1} of listing #${p.property_id}" loading="lazy">`).join('')}</div>`:''}
+    ${p.description_en?`<details class="desc"><summary>Full listing (English)</summary><p>${esc(p.description_en)}</p></details>`:''}
+    ${p.description_ja?`<details class="desc"><summary>${p.description_en?'Original Japanese':'Full listing text (Japanese, not yet translated)'}</summary><p class="jp">${esc(p.description_ja)}</p></details>`:''}
+    ${contactBlock(p.contact)}
+    <div class="foot"><span>#${p.property_id}</span>${p.price_per_m2_land?`<span class="num">¥${Math.round(p.price_per_m2_land/1e3).toLocaleString('en')}k/m² land</span>`:''}${p.est_acquisition_cost_jpy?`<span>Est. all-in purchase ${yen(p.est_acquisition_cost_jpy)}</span>`:''}${src?`<span>via ${esc(src)}</span>`:''}${(p.links||[{source:'listing',url:p.primary_url}]).filter(l=>l.url).map((l,i,a)=>{const n=a.filter(x=>x.source===l.source), k=n.indexOf(l); return `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(SRC[l.source]||l.source)}${n.length>1?' '+(k+1):''} ↗</a>`}).join('')}${p.lat?`<a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}" target="_blank" rel="noopener">Google Maps ↗</a>`:''}</div>
+  </article>`;
+}
+$('cards').onclick=e=>{if(e.target.closest('a,details,.contact')) return; const c=e.target.closest('.card'); if(c) select(+c.dataset.id,false);};
+$('cards').onkeydown=e=>{if(e.key==='Enter'){const c=e.target.closest('.card'); if(c) select(+c.dataset.id,false);}};
+
+function median(a){if(!a.length) return null; const s=[...a].sort((x,y)=>x-y), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2;}
+function update(){
+  const list = rows();
+  $('tab-leads').setAttribute('aria-selected',S.tab==='leads'); $('tab-all').setAttribute('aria-selected',S.tab==='all');
+  $('catwrap').hidden = $('watchwrap').hidden = S.tab!=='leads';
+  $('sort').querySelector('[value=weight]').hidden = S.tab!=='leads';
+  $('pricev').textContent = '¥'+S.price+'M'; $('walkv').textContent = S.walk+' min'; $('landv').textContent = S.land?S.land+' m²':'any';
+  const nLeads = D.leads.filter(l=>l.is_lead).length;
+  const med = median(list.map(p=>p.price_jpy)), medL = median(list.filter(p=>p.land_area_m2&&p.property_type!=='condominium').map(p=>p.price_per_m2_land).filter(Boolean));
+  $('stats').innerHTML = [
+    [list.length.toLocaleString('en'),S.tab==='leads'?'matching leads':'matching listings'],
+    [yen(med),'median price'],
+    [medL?'¥'+Math.round(medL/1e3).toLocaleString('en')+'k':'–','median ¥ per m² of land'],
+    [nLeads,`leads under ¥${D.lead_max/1e6}M`],
+    [D.properties.length,'active listings ≤ ¥150M'],
+    [new Date(D.generated).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}),'data as of'],
+  ].map(([v,l])=>`<div><b>${esc(v)}</b>${esc(l)}</div>`).join('');
+  $('listtitle').textContent = S.tab==='leads'?(S.watch?'Leads and watchlist':'Leads'):'All properties';
+  $('cards').innerHTML = list.length ? list.slice(0,S.shown).map(card).join('') : `<div class="empty">Nothing matches these filters. Try a higher price, a longer walk, or another area.</div>`;
+  $('more').hidden = list.length<=S.shown; $('more').textContent = `Show more (${list.length-S.shown} left)`;
+  drawMap(list);
+}
+if(matchMedia('(max-width:860px)').matches) $('fwrap').open=false;
+setupFilters(); update();
+</script>
