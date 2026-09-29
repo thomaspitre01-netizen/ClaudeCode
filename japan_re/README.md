@@ -42,6 +42,7 @@ python -m japan_re search --station Kichijoji --walk 15 --built-before 1980 --so
 python -m japan_re leads                  # the curated short list (≤¥70M; land, age, character, renovation first)
 python -m japan_re leads --area Koenji --watchlist
 python -m japan_re leads --out leads.md   # the whole Leads page: cards, indicators, categories, watchlist
+                                          # opens with "New or Changed (last 7 days)": new leads and price moves
 python -m japan_re leads --out leads.json --format json   # the same for the dashboard
 python -m japan_re show 123               # one property: all sources, price history, JA + EN text
 python -m japan_re mark seen 123 124       # checked it; 'liked' also makes it a favorite, 'passed' hides it from Leads

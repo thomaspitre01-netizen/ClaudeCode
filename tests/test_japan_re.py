@@ -425,6 +425,17 @@ class LeadsTests(unittest.TestCase):
         self.assertEqual(L.indicators['Freehold'], ('🔴', 'leasehold'))
         self.assertLess(L.weight, self.assess().weight)
 
+    def test_new_or_changed_this_week(self):
+        from japan_re import leads
+        self.assertNotIn(leads.NEW_CAT, self.assess().categories)
+        cut = self.assess(recent_change=(48_000_000, 45_000_000, '2026-09-29T19:30:00+00:00'))
+        self.assertEqual(leads.main_category(cut), leads.NEW_CAT)
+        self.assertIn('price cut ¥48.0M → ¥45.0M on 2026-09-29', cut.reason)
+        r = self.row(first_seen='2026-09-29')
+        area, tier, station = leads.locate(r, {'高円寺': 8})
+        new = leads.assess(r, area, tier, {}, '2026-09-28', leads._text(r), station)
+        self.assertEqual(leads.main_category(new), leads.NEW_CAT)
+
     def test_station_name_is_not_machiya(self):
         self.assertNotEqual(n.classify_type('detached_house', '家', '「湘南町屋」駅 徒歩5分')[0], 'machiya')
 
