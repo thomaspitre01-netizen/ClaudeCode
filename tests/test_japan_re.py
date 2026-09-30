@@ -113,6 +113,7 @@ class SourceTests(unittest.TestCase):
                                  'https://suumo.jp/chukoikkodate/tokyo/sc_musashino/nc_71234568/'])
         self.assertIn('pn=2', s.next_page(read('suumo_list.html'), url))
         self.assertEqual(s.skipped, {'over ¥150M': 1, 'bus only': 1, 'no photos': 1, 'nearby suggestion': 1})
+        self.assertEqual(s.card_prices[links[0]], 69_800_000)
 
     def test_suumo_detail_record(self):
         s = sources.get('suumo')
@@ -345,6 +346,11 @@ class CrawlTests(unittest.TestCase):
             client.requested.clear()
             crawl_source(conn, client, s, musashino, ('detached_house',), log=lambda *_: None)
             self.assertNotIn(a, client.requested)
+            # a changed price on the list card makes it read the listing again
+            conn.execute('UPDATE listings SET price_jpy = 72800000 WHERE url = ?', (a,))
+            client.requested.clear()
+            crawl_source(conn, client, s, musashino, ('detached_house',), log=lambda *_: None)
+            self.assertIn(a, client.requested)
             conn.close()
 
     def test_restricted_source_refused(self):

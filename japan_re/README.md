@@ -26,7 +26,8 @@ so parsers can be improved and re-run without fetching again. Neither is committ
 
 Crawls are deliberately slow: one request every 6+ seconds per site (longer if the
 site asks), so a first full crawl of the core areas takes hours, not minutes.
-After that, only new listings and ones not read for 3 days are fetched.
+After that, only new listings, ones whose list-card price changed (SUUMO), and ones not read for
+3 days (30 days on SUUMO, where the card price catches changes) are fetched.
 To keep it fresh, run it daily, e.g. with cron:
 
 ```

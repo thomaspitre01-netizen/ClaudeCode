@@ -26,6 +26,9 @@ class Suumo(Source):
                     'consent; art. 3(1)(6)-(7): no interfering with operation, no commercial use. '
                     'robots.txt has 300+ Disallow rules for all agents; enforced per URL.')
     enabled_by_default = True
+    # list cards carry the price, so a changed price triggers a re-read; unchanged
+    # listings are re-read monthly instead of every few days (3,000+ pages at 6 s each)
+    refresh_days = 30
     # /chukoikkodate/tokyo/sc_musashino/nc_76543210/  /tochi/.../nc_123/  /ms/chuko/.../nc_123/
     detail_re = re.compile(r'suumo\.jp/(?:chukoikkodate|ikkodate|tochi|ms/chuko)/[^?#]*?nc_(?P<id>\d+)/?(?:$|[?#])')
 
@@ -64,7 +67,7 @@ class Suumo(Source):
 
     def detail_links(self, html, page_url):
         soup = BeautifulSoup(html, 'html.parser')
-        keep, self.skipped = [], {}
+        keep, self.skipped, self.card_prices = [], {}, {}
         cards = soup.find_all('div', class_='property_unit')
         if not cards:                      # page layout changed: fall back to every link
             return super().detail_links(html, page_url)
@@ -81,14 +84,23 @@ class Suumo(Source):
             href = self.canonical_url(href)
             if href not in keep:
                 keep.append(href)
+                self.card_prices[href] = self._card_price(card)
         return keep
+
+    @staticmethod
+    def _card_fields(card) -> dict:
+        return {nfkc(dt.get_text(strip=True)): nfkc(dd.get_text(' ', strip=True))
+                for dl in card.find_all('dl') for dt, dd in zip(dl.find_all('dt'), dl.find_all('dd'))}
+
+    def _card_price(self, card) -> int | None:
+        f = self._card_fields(card)
+        return parse_price(f.get('販売価格') or f.get('価格'))[0]
 
     def skip_reason(self, card, href) -> str | None:
         if 'fmlg=' in href:
             return 'nearby suggestion'
-        fields = {nfkc(dt.get_text(strip=True)): nfkc(dd.get_text(' ', strip=True))
-                  for dl in card.find_all('dl') for dt, dd in zip(dl.find_all('dt'), dl.find_all('dd'))}
-        price = parse_price(fields.get('販売価格') or fields.get('価格'))[0]
+        fields = self._card_fields(card)
+        price = self._card_price(card)
         if price and price > self.MAX_PRICE:
             return 'over ¥150M'
         access = fields.get('沿線・駅') or ''
