@@ -68,6 +68,13 @@ svg.map .pt.sel{stroke:var(--ink);stroke-width:3}
 svg.map .scale{stroke:var(--muted);stroke-width:2}
 svg.map .stext{fill:var(--muted);font:11px var(--mono)}
 .note{padding:8px 12px;font-size:12px;color:var(--muted);border-top:1px solid var(--line)}
+.fresh{background:var(--kaki-soft);border:1px solid var(--kaki);border-radius:10px;padding:12px 14px;display:grid;gap:8px}
+.fresh h2{font:700 16px var(--serif);margin:0;color:var(--kaki)}
+.fresh ul{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.fresh li button{all:unset;cursor:pointer;display:block;line-height:1.5}
+.fresh li button:hover b,.fresh li button:focus-visible b{text-decoration:underline}
+.fresh .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px}
+.fresh .row button{border:1px solid var(--kaki);background:var(--panel);color:var(--kaki);border-radius:6px;padding:3px 10px;cursor:pointer}
 .listhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
 .listhead h2{font:700 18px var(--serif);margin:0}
 .listhead select{width:auto}
@@ -134,6 +141,7 @@ svg.map .stext{fill:var(--muted);font:11px var(--mono)}
     </details>
   </aside>
   <main>
+    <section class="fresh" id="fresh" hidden aria-label="New or changed in the last 7 days"></section>
     <section class="mapbox" aria-label="Map">
       <div class="maphead">
         <div class="tabs" id="regions"></div>
@@ -360,6 +368,20 @@ function update(){
   $('cards').innerHTML = list.length ? list.slice(0,S.shown).map(card).join('') : `<div class="empty">Nothing matches these filters. Try a higher price, a longer walk, or another area.</div>`;
   $('more').hidden = list.length<=S.shown; $('more').textContent = `Show more (${list.length-S.shown} left)`;
   drawMap(list);
+  drawFresh();
+}
+const NEW_CAT = 'New or Changed (last 7 days)';
+function drawFresh(){
+  const f = D.leads.filter(l=>l.is_lead&&(l.categories||[]).includes(NEW_CAT)).map(merged).sort((a,b)=>b.weight-a.weight);
+  const box = $('fresh'); box.hidden = S.tab!=='leads';
+  if(box.hidden) return;
+  const on = S.cats.size===1&&S.cats.has(NEW_CAT);
+  box.innerHTML = `<h2>New or changed in the last 7 days (${f.length})</h2>` + (f.length ? `<ul>${f.map(p=>{
+    const what = /price (cut|raised)[^;]*→[^;]*/.exec(p.reason||'');
+    return `<li><button data-id="${p.property_id}"><b>${esc(yen(p.price_jpy))} ${esc((TYPE[p.property_type]||TYPE.other)[0].toLowerCase())} in ${esc(p.area||p.municipality||'')}</b> · ${what?esc(what[0].replace(/[.\s]+$/,'')):'new listing'}${p.first_seen?` · first seen ${esc(String(p.first_seen).slice(0,10))}`:''} · #${p.property_id}</button></li>`;
+  }).join('')}</ul><div class="row"><button id="freshonly">${on?'Show all leads':'Show only these below'}</button></div>` : `<div>No new leads or price changes this week.</div>`);
+  box.querySelectorAll('li button').forEach(b=>b.onclick=()=>{const id=+b.dataset.id; if(S.sel!==id) select(id,false); const el=document.querySelector(`.card[data-id="${id}"]`); el&&el.scrollIntoView({block:'center'});});
+  const t=$('freshonly'); if(t) t.onclick=()=>{S.cats=on?new Set():new Set([NEW_CAT]); S.shown=PAGE; setupFilters(); update();};
 }
 if(matchMedia('(max-width:860px)').matches) $('fwrap').open=false;
 setupFilters(); update();
