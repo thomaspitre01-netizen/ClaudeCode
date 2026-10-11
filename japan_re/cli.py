@@ -277,6 +277,22 @@ def cmd_leads(conn, a):
     print(f'{sum(L.is_lead for L in found)} leads')
 
 
+def cmd_dashboard(conn, a):
+    from . import dashboard
+    data = dashboard.build(conn, dashboard.load_translations(a.translations or a.db),
+                           dashboard.load_photos(a.photos or a.db))
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(dashboard.render(data), encoding='utf-8')
+    print(f'{len(data["properties"])} properties, {sum(x.get("is_lead", False) for x in data["leads"])} leads -> {out}')
+
+
+def cmd_photos(conn, a):
+    from . import photos
+    got = photos.collect(conn, Path(a.out))
+    print(f'{len(got)} leads with photos -> {a.out}')
+
+
 def cmd_export(conn, a):
     rows = conn.execute("SELECT * FROM v_properties" + ('' if a.all else ' WHERE in_scope = 1')).fetchall()
     out = Path(a.out)
@@ -389,6 +405,16 @@ def main(argv=None):
     p.add_argument('--unchecked', action='store_true', help='only leads not yet marked seen/liked/passed')
     p.add_argument('--show-passed', action='store_true', help='include the ones marked passed')
     p.set_defaults(fn=cmd_leads)
+
+    p = sub.add_parser('dashboard', help='write the private dashboard (map, filters, Leads) as one HTML page')
+    p.add_argument('--out', default='data/dashboard.html')
+    p.add_argument('--translations', help='English listing texts (default: translations_en.json beside the DB)')
+    p.add_argument('--photos', help='embedded lead photos (default: photos.json beside the DB)')
+    p.set_defaults(fn=cmd_dashboard)
+
+    p = sub.add_parser('photos', help='fetch a few small photos per lead for the dashboard')
+    p.add_argument('--out', required=True, help='photos.json to create or extend')
+    p.set_defaults(fn=cmd_photos)
 
     p = sub.add_parser('mark', help='mark properties as seen, liked or passed (clear to undo)')
     p.add_argument('state', choices=['seen', 'liked', 'passed', 'clear'])
