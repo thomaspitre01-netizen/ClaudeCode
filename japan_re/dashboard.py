@@ -73,9 +73,10 @@ def contact(text: str) -> dict:
     return out
 
 
-def _extras(conn, property_id, translations: dict) -> dict:
-    """Every source's link, the agency's contact details and the listing text (Japanese,
-    plus English where a translation exists), so a listing can be judged without the portal."""
+def _extras(conn, property_id, translations: dict, full_text: bool = True) -> dict:
+    """Every source's link, the agency's contact details and, for leads (`full_text`), the
+    listing text (Japanese, plus English where a translation exists), so a listing can be
+    judged without the portal. Other listings skip the text to keep the page under 16 MB."""
     rows = conn.execute('SELECT source_id, url, agency_name, agency_phone, description_ja FROM listings '
                         "WHERE property_id = ? ORDER BY source_id = 'suumo', id", (property_id,)).fetchall()
     links = [{'source': r['source_id'], 'url': r['url']} for r in rows if r['url']]
@@ -83,7 +84,7 @@ def _extras(conn, property_id, translations: dict) -> dict:
     c = contact(raw)
     c.setdefault('phone', next((r['agency_phone'] for r in rows if r['agency_phone']), None))
     c.setdefault('company', next((r['agency_name'] for r in rows if r['agency_name']), None))
-    desc = clean_description(raw)
+    desc = clean_description(raw) if full_text else ''
     return _compact({'links': links, 'contact': _compact(c) or None, 'description_ja': desc or None,
                      'description_en': translations.get(desc_key(desc)) if desc else None})
 
@@ -104,7 +105,9 @@ def _within_budget(photos: dict, order: list[str]) -> dict:
 def build(conn, translations: dict | None = None, photos: dict | None = None) -> dict:
     translations = translations or {}
     found = leads.find(conn)
-    photos = _within_budget(photos or {}, [str(L.row['property_id']) for L in found if L.is_lead])
+    lead_ids = [str(L.row['property_id']) for L in found if L.is_lead]
+    photos = _within_budget(photos or {}, lead_ids)
+    lead_ids = set(lead_ids)
     rows = conn.execute("SELECT * FROM v_properties WHERE status = 'active' AND in_scope = 1 "
                         'AND price_jpy IS NOT NULL AND price_jpy <= ?', (HARD_MAX,)).fetchall()
     props = []
@@ -113,7 +116,7 @@ def build(conn, translations: dict | None = None, photos: dict | None = None) ->
         area, tier, station = leads.locate(r, leads._stations(conn, r['property_id']))
         p = {k: r[k] for k in KEYS}
         p.update(area=area, tier=tier, main_station=station, photos=photos.get(str(r['property_id'])),
-                 **_extras(conn, r['property_id'], translations))
+                 **_extras(conn, r['property_id'], translations, str(r['property_id']) in lead_ids))
         props.append(_compact(p))
     lead_rows = [_compact({k: v for k, v in x.items() if k not in ('thumbnail_url',)})
                  for x in leads.to_json(found)]
