@@ -265,6 +265,15 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(v['station_walk_min'], 12)
         self.assertEqual(v['price_per_m2_land'], round(62_000_000 / 285.12))
 
+    def test_bus_ride_is_not_a_walk(self):
+        from japan_re import leads
+        row, st = self._suumo()
+        bus = dict(st[0], station_ja='吉祥寺', station_en='Kichijoji', walk_min=4, bus_min=16,
+                   raw_ja='「吉祥寺」駅 バス16分 「柳沢」バス停 徒歩4分')
+        lid, _ = db.upsert_listing(self.conn, row, [bus])
+        pid = self.conn.execute('SELECT property_id FROM listings WHERE id = ?', (lid,)).fetchone()[0]
+        self.assertEqual(leads._stations(self.conn, pid), {})
+
     def test_removed_after_two_complete_runs_only(self):
         row, st = self._suumo()
         lid, _ = db.upsert_listing(self.conn, row, st)

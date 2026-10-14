@@ -87,10 +87,11 @@ class Lead:
 
 def _stations(conn, property_id) -> dict[str, int]:
     out: dict[str, int] = {}
-    for s in conn.execute('SELECT s.station_ja, s.station_en, s.walk_min FROM listings l '
+    for s in conn.execute('SELECT s.station_ja, s.station_en, s.walk_min, s.bus_min FROM listings l '
                           'JOIN listing_stations s ON s.listing_id = l.id WHERE l.property_id = ?',
                           (property_id,)):
-        if s['walk_min'] is None:
+        # "Kamakura, bus 14 min + 3 min walk from the stop" is not a 3-minute walk
+        if s['walk_min'] is None or s['bus_min']:
             continue
         for name in (s['station_ja'], s['station_en']):
             if name:
