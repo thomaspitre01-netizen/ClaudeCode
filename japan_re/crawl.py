@@ -20,7 +20,7 @@ def _stale(conn, url: str, refresh_days: float, card_price: int | None = None) -
     return age.total_seconds() > refresh_days * 86400
 
 
-def crawl_source(conn, client: PoliteClient, source: Source, munis, categories=('detached_house', 'land'),
+def crawl_source(conn, client: PoliteClient, source: Source, munis, categories=('detached_house', 'land', 'condominium'),
                  refresh_days: float = 3, max_details: int | None = None, log=print) -> dict:
     if not crawlable(source):
         raise PermissionError(f'{source.id} has policy {source.policy!r}; it is not crawled. '
@@ -114,6 +114,8 @@ def crawl_source(conn, client: PoliteClient, source: Source, munis, categories=(
         notes.append(str(e))
         log(f'  stopped: {e}')
 
+    if set(categories) < {'detached_house', 'land', 'condominium'}:
+        complete = False    # a partial run (e.g. apartments only) must not count the rest as missing
     stats["listings_seen"] = len(seen)
     munis_covered = {m.name_en for m in munis} if source.per_municipality else None
     removed = db.close_run(conn, source.id, complete, seen, munis_covered)

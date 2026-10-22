@@ -265,7 +265,9 @@ def cmd_leads(conn, a):
             out.write_text(json.dumps(leads.to_json(found), ensure_ascii=False, indent=1), encoding='utf-8')
         else:
             out.write_text(leads.to_markdown(found), encoding='utf-8')
-        print(f'{sum(L.is_lead for L in found)} leads, {sum(not L.is_lead for L in found)} watchlist -> {out}')
+        flats = sum(leads.FLAT_CAT in L.categories for L in found)
+        print(f'{sum(L.is_lead for L in found) - flats} leads, {sum(not L.is_lead for L in found)} watchlist, '
+              f'{flats} apartments -> {out}')
         return
     for L in found[:a.limit]:
         r = L.row
@@ -307,7 +309,7 @@ def main(argv=None):
     p.add_argument('--source', action='append')
     p.add_argument('--tier', choices=areas.TIERS, default='core')
     p.add_argument('--area', action='append', help='municipality, English or Japanese (repeatable)')
-    p.add_argument('--categories', nargs='+', default=['detached_house', 'land'],
+    p.add_argument('--categories', nargs='+', default=['detached_house', 'land', 'condominium'],
                    choices=['detached_house', 'land', 'condominium'])
     p.add_argument('--refresh-days', type=float, default=3, help='re-read a listing page after this many days')
     p.add_argument('--max-details', type=int, help='stop after reading this many listing pages')

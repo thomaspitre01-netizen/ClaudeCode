@@ -246,8 +246,10 @@ def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
                                          'price_cut')]
     strong = core + [s for s in set(sig) if s in ('land', 'freehold', 'garden', 'unusual')]
     if is_flat:
-        # a flat needs to be cheap and old or in need of work to beat a house with land
-        L.is_lead = price <= IDEAL_MAX and ('age' in sig or 'renovation' in sig)
+        # apartments are judged among themselves (own section, 22 Oct 2026): the same price
+        # limits, and an old or tired flat is the renovation project the brief is about
+        flat_core = [s for s in core if s in ('age', 'renovation', 'traditional', 'price_cut')]
+        L.is_lead = len(flat_core) >= (1 if price <= IDEAL_MAX else 2)
     elif price <= IDEAL_MAX:
         L.is_lead = len(core) >= 1 and len(strong) >= 3 or len(core) >= 2
     else:
@@ -268,6 +270,15 @@ def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
         L.weight -= 10
 
     cats = L.categories
+    if is_flat:
+        # shown in their own section, never mixed into the house and land lists
+        if L.is_lead:
+            cats.append(FLAT_CAT)
+            if 'new' in sig or 'changed' in sig:
+                cats.append(NEW_CAT)
+            if 'price_cut' in sig:
+                cats.append('Price Opportunities')
+        return L
     if L.is_lead:
         if 'new' in sig or 'changed' in sig:
             cats.append(NEW_CAT)
@@ -318,11 +329,14 @@ def _reason(r, area, extras, station=None) -> str:
 # A lead can fit several categories but is shown once, under the first that fits in
 # this order; the card lists the others as tags.
 NEW_CAT = 'New or Changed (last 7 days)'
+FLAT_CAT = 'Apartments'
 CATEGORY_ORDER = (NEW_CAT, 'Traditional Properties', 'Renovation Opportunities', 'Land Opportunities',
-                  'Price Opportunities', 'Unusual / Hidden Opportunities', 'Other Leads', 'Watchlist')
+                  'Price Opportunities', 'Unusual / Hidden Opportunities', 'Other Leads', 'Watchlist', FLAT_CAT)
 
 
 def main_category(L: 'Lead') -> str:
+    if FLAT_CAT in L.categories:
+        return FLAT_CAT
     return next(c for c in CATEGORY_ORDER if c in L.categories)
 
 
@@ -416,10 +430,13 @@ def card(L: Lead) -> list[str]:
 
 
 def to_markdown(found: list[Lead]) -> str:
-    leads = [L for L in found if L.is_lead]
+    flats = [L for L in found if FLAT_CAT in L.categories]
+    leads = [L for L in found if L.is_lead and L not in flats]
     unchecked = sum(1 for L in leads if not L.review)
     out = [f'# Leads · {dt.date.today():%d %b %Y}', '',
-           f'{len(leads)} leads ({unchecked} not checked yet) and {len(found) - len(leads)} on the watchlist. Hard limits: ¥70M and a 30-minute walk from a main station; ¥50M or less '
+           f'{len(leads)} house and land leads ({unchecked} not checked yet), '
+           f'{len(found) - len(leads) - len(flats)} on the watchlist and {len(flats)} apartments '
+           f'(listed separately at the end). Hard limits: ¥70M and a 30-minute walk from a main station; ¥50M or less '
            'preferred. Ranked by land, ownership, character, age, location and renovation potential. '
            'Indicator order: Price, Land, Age, Renovation, Location, Traditional character, Freehold '
            '(🟢 good · 🟡 so-so · 🔴 against · ⚪ unknown).', '']
@@ -430,6 +447,9 @@ def to_markdown(found: list[Lead]) -> str:
         if not group:
             continue
         out += [f'## {cat} ({len(group)})', '']
+        if cat == FLAT_CAT:
+            out += ['Apartments (マンション) in the same areas, same limits, judged among themselves: '
+                    'built before 1981 or in need of work, ¥70M at most. No land of their own.', '']
         for L in group:
             out += card(L)
     if not found:
