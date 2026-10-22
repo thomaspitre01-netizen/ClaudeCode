@@ -28,6 +28,8 @@ HARD_MAX = 70_000_000
 IDEAL_MAX = 50_000_000
 SWEET_MIN = 30_000_000
 WALK_MAX = 30            # hard limit: minutes on foot from one of the main stations below
+FLAT_MAX = 30_000_000    # apartments (Thomas, 22 Oct 2026): no land of their own, so ¥30M at most
+FLAT_WALK_MAX = 15       # and at most a 15-minute walk from the main station
 
 # The main station of each area. A property is in an area when the listing gives a walk
 # of WALK_MAX minutes or less to that station, or - when the listing names other stations -
@@ -106,8 +108,8 @@ def _km(a, b) -> float:
     return math.hypot(dx, dy)
 
 
-def locate(r, stations: dict[str, int]) -> tuple[str | None, str | None, str | None]:
-    """(area, tier, 'Kichijoji, 12 min walk') for the best main station within WALK_MAX,
+def locate(r, stations: dict[str, int], max_walk: int = WALK_MAX) -> tuple[str | None, str | None, str | None]:
+    """(area, tier, 'Kichijoji, 12 min walk') for the best main station within max_walk,
     primary areas before secondary ones, else (None, None, None)."""
     best = None
     for area, tier, names, coord in STATIONS:
@@ -116,7 +118,7 @@ def locate(r, stations: dict[str, int]) -> tuple[str | None, str | None, str | N
         if walk is None and r.get('lat') and r.get('lng'):
             walk = round(_km((r['lat'], r['lng']), coord) * 1000 / M_PER_MIN_STRAIGHT)
             how = 'walk, estimated from the map'
-        if walk is None or walk > WALK_MAX:
+        if walk is None or walk > max_walk:
             continue
         key = (tier != 'primary', walk)
         if best is None or key < best[0]:
@@ -248,8 +250,9 @@ def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
     if is_flat:
         # apartments are judged among themselves (own section, 22 Oct 2026): the same price
         # limits, and an old or tired flat is the renovation project the brief is about
-        flat_core = [s for s in core if s in ('age', 'renovation', 'traditional', 'price_cut')]
-        L.is_lead = len(flat_core) >= (1 if price <= IDEAL_MAX else 2)
+        # Thomas's own rules for them: ¥30M at most, 15 minutes' walk (checked here and by
+        # the caller); within those every apartment is listed, in its own section
+        L.is_lead = price <= FLAT_MAX
     elif price <= IDEAL_MAX:
         L.is_lead = len(core) >= 1 and len(strong) >= 3 or len(core) >= 2
     else:
@@ -366,7 +369,10 @@ def find(conn, areas: list[str] | None = None, include_secondary: bool = True,
     for row in rows:
         r = dict(row)
         r['recent_change'] = changes.get(r['property_id'])
-        area, tier, station = locate(r, _stations(conn, r['property_id']))
+        if r['property_type'] == 'condominium' and r['price_jpy'] > FLAT_MAX:
+            continue
+        area, tier, station = locate(r, _stations(conn, r['property_id']),
+                                     FLAT_WALK_MAX if r['property_type'] == 'condominium' else WALK_MAX)
         if not area or (tier == 'secondary' and not include_secondary):
             continue
         if areas and area not in areas:
@@ -448,8 +454,8 @@ def to_markdown(found: list[Lead]) -> str:
             continue
         out += [f'## {cat} ({len(group)})', '']
         if cat == FLAT_CAT:
-            out += ['Apartments (マンション) in the same areas, same limits, judged among themselves: '
-                    'built before 1981 or in need of work, ¥70M at most. No land of their own.', '']
+            out += ['Apartments (マンション) in the same areas, kept apart because they have no land of '
+                    'their own: ¥30M at most and at most a 15-minute walk from the main station.', '']
         for L in group:
             out += card(L)
     if not found:

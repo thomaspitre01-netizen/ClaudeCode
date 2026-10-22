@@ -48,11 +48,13 @@ class Suumo(Source):
         '14204': [('ek_08890', 'Kamakura'), ('ek_11100', 'Kita-Kamakura')],
     }
 
-    # Apartments (Thomas, 22 Oct 2026: "include apartments but as a separate category"),
-    # kept lean: only the municipalities around the lead areas' main stations, and only
-    # cards a lead could come from (¥70M cap, within a 30-minute walk of those stations).
+    # Apartments (Thomas, 22 Oct 2026: "include apartments but as a separate category";
+    # "cap at 30 million because no land ownership, and 15 minute walk"), kept lean: only
+    # the municipalities around the lead areas' main stations, and only cards a lead
+    # could come from.
     FLAT_MUNIS = {'13114', '13115', '13203', '13204', '14204'}   # Nakano, Suginami, Musashino, Mitaka, Kamakura
-    FLAT_MAX_PRICE = 70_000_000
+    FLAT_MAX_PRICE = 30_000_000
+    FLAT_MAX_WALK = 15
     FLAT_STATIONS = ('吉祥寺', '高円寺', '中野', '鎌倉', '三鷹')   # 中野 also matches 東中野/新中野, 鎌倉 北鎌倉
 
     def search_targets(self, munis, categories=('detached_house', 'land', 'condominium')):
@@ -120,10 +122,10 @@ class Suumo(Source):
             return 'bus only'
         if '/ms/' in href:
             if price and price > self.FLAT_MAX_PRICE:
-                return 'apartment over ¥70M'
+                return 'apartment over ¥30M'
             near = [int(w) for st, w in re.findall(r'「([^」]+)」[^「]*?徒歩\s*(\d+)\s*分', access)
                     if any(x in st for x in self.FLAT_STATIONS)]
-            if not near or min(near) > self.MAX_WALK:
+            if not near or min(near) > self.FLAT_MAX_WALK:
                 return 'apartment away from the lead stations'
         photos = [i for i in card.find_all('img') if 'suumo.com' in (i.get('rel') and ' '.join(i.get('rel'))
                                                                       or i.get('src') or '')]
