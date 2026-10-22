@@ -10,9 +10,11 @@ from .sources import crawlable
 from .sources.base import Source
 
 
-def _stale(conn, url: str, refresh_days: float) -> bool:
-    r = conn.execute('SELECT last_fetched FROM listings WHERE url = ?', (url,)).fetchone()
+def _stale(conn, url: str, refresh_days: float, card_price: int | None = None) -> bool:
+    r = conn.execute('SELECT last_fetched, price_jpy FROM listings WHERE url = ?', (url,)).fetchone()
     if r is None or r['last_fetched'] is None:
+        return True
+    if card_price and r['price_jpy'] and card_price != r['price_jpy']:
         return True
     age = dt.datetime.now(dt.timezone.utc) - dt.datetime.fromisoformat(r['last_fetched'])
     return age.total_seconds() > refresh_days * 86400
@@ -34,6 +36,7 @@ def crawl_source(conn, client: PoliteClient, source: Source, munis, categories=(
     notes: list[str] = []
 
     targets = source.search_targets(munis, categories)
+    refresh_days = getattr(source, 'refresh_days', None) or refresh_days
 
     try:
         for t in targets:
@@ -62,7 +65,7 @@ def crawl_source(conn, client: PoliteClient, source: Source, munis, categories=(
                         continue
                     seen.add(link)
                     db.mark_seen(conn, link, at)
-                    if _stale(conn, link, refresh_days):
+                    if _stale(conn, link, refresh_days, getattr(source, 'card_prices', {}).get(link)):
                         queue.append((link, t.category_hint))
                 conn.commit()
                 skipped = getattr(source, 'skipped', None)

@@ -87,10 +87,11 @@ class Lead:
 
 def _stations(conn, property_id) -> dict[str, int]:
     out: dict[str, int] = {}
-    for s in conn.execute('SELECT s.station_ja, s.station_en, s.walk_min FROM listings l '
+    for s in conn.execute('SELECT s.station_ja, s.station_en, s.walk_min, s.bus_min FROM listings l '
                           'JOIN listing_stations s ON s.listing_id = l.id WHERE l.property_id = ?',
                           (property_id,)):
-        if s['walk_min'] is None:
+        # "Kamakura, bus 14 min + 3 min walk from the stop" is not a 3-minute walk
+        if s['walk_min'] is None or s['bus_min']:
             continue
         for name in (s['station_ja'], s['station_en']):
             if name:
@@ -233,6 +234,10 @@ def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
         extras.append('rebuild not permitted (再建築不可)')
     if new_since and r['first_seen'] and r['first_seen'] >= new_since:
         sig.append('new')
+    if r.get('recent_change'):
+        prev, now, at = r['recent_change']
+        extras.append(f'price {"cut" if now < prev else "raised"} ¥{prev / 1e6:,.1f}M → ¥{now / 1e6:,.1f}M on {at[:10]}')
+        sig.append('changed')
     L.reason = _reason(r, area, extras, station)
 
     # ----- is it a lead? hard cap and area are checked by the caller
@@ -264,8 +269,8 @@ def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
 
     cats = L.categories
     if L.is_lead:
-        if 'new' in sig:
-            cats.append('New Leads')
+        if 'new' in sig or 'changed' in sig:
+            cats.append(NEW_CAT)
         if 'renovation' in sig or ('age' in sig and ind['Renovation'][0] != RED):
             cats.append('Renovation Opportunities')
         if not is_flat and ('land' in sig or 'land_value' in sig or 'redevelop' in sig):
@@ -312,7 +317,8 @@ def _reason(r, area, extras, station=None) -> str:
 
 # A lead can fit several categories but is shown once, under the first that fits in
 # this order; the card lists the others as tags.
-CATEGORY_ORDER = ('New Leads', 'Traditional Properties', 'Renovation Opportunities', 'Land Opportunities',
+NEW_CAT = 'New or Changed (last 7 days)'
+CATEGORY_ORDER = (NEW_CAT, 'Traditional Properties', 'Renovation Opportunities', 'Land Opportunities',
                   'Price Opportunities', 'Unusual / Hidden Opportunities', 'Other Leads', 'Watchlist')
 
 
@@ -330,12 +336,22 @@ def find(conn, areas: list[str] | None = None, include_secondary: bool = True,
         f"AND property_type IN ({','.join('?' * len(TYPES))})", (max_price, *TYPES)).fetchall()
     medians = land_medians(conn)
     reviews = {x['property_id']: (x['state'], x['note']) for x in conn.execute('SELECT * FROM reviews')}
-    first = conn.execute('SELECT MIN(first_seen) FROM listings').fetchone()[0] or ''
+    first = conn.execute('SELECT MIN(first_seen) FROM listings').fetchone()[0]
     week_ago = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=7)).isoformat()
-    new_since = week_ago if first < week_ago else None   # 'new' means nothing in week one
+    # the first day's full crawl is the baseline, not news
+    baseline = (dt.date.fromisoformat(first[:10]) + dt.timedelta(days=1)).isoformat() if first else ''
+    new_since = max(week_ago, baseline)
+    changes = {}                                        # property_id -> (previous, now, when), latest first
+    for x in conn.execute('''SELECT l.property_id, h.previous_price_jpy, h.price_jpy, h.observed_at
+                             FROM price_history h JOIN listings l ON l.id = h.listing_id
+                             WHERE h.observed_at >= ? AND h.previous_price_jpy IS NOT NULL
+                               AND h.price_jpy IS NOT NULL AND h.price_jpy != h.previous_price_jpy
+                             ORDER BY h.observed_at DESC''', (week_ago,)):
+        changes.setdefault(x[0], (x[1], x[2], x[3]))
     out = []
     for row in rows:
         r = dict(row)
+        r['recent_change'] = changes.get(r['property_id'])
         area, tier, station = locate(r, _stations(conn, r['property_id']))
         if not area or (tier == 'secondary' and not include_secondary):
             continue
@@ -409,8 +425,8 @@ def to_markdown(found: list[Lead]) -> str:
            '(🟢 good · 🟡 so-so · 🔴 against · ⚪ unknown).', '']
     for cat in CATEGORY_ORDER:
         group = [L for L in found if main_category(L) == cat]
-        if cat == 'New Leads' and not group:
-            continue
+        if not group and cat == NEW_CAT and found:
+            out += [f'## {cat} (0)', '', 'No new leads or price changes this week.', '']
         if not group:
             continue
         out += [f'## {cat} ({len(group)})', '']

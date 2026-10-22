@@ -26,7 +26,8 @@ so parsers can be improved and re-run without fetching again. Neither is committ
 
 Crawls are deliberately slow: one request every 6+ seconds per site (longer if the
 site asks), so a first full crawl of the core areas takes hours, not minutes.
-After that, only new listings and ones not read for 3 days are fetched.
+After that, only new listings, ones whose list-card price changed (SUUMO), and ones not read for
+3 days (30 days on SUUMO, where the card price catches changes) are fetched.
 To keep it fresh, run it daily, e.g. with cron:
 
 ```
@@ -42,6 +43,7 @@ python -m japan_re search --station Kichijoji --walk 15 --built-before 1980 --so
 python -m japan_re leads                  # the curated short list (≤¥70M; land, age, character, renovation first)
 python -m japan_re leads --area Koenji --watchlist
 python -m japan_re leads --out leads.md   # the whole Leads page: cards, indicators, categories, watchlist
+                                          # opens with "New or Changed (last 7 days)": new leads and price moves
 python -m japan_re leads --out leads.json --format json   # the same for the dashboard
 python -m japan_re show 123               # one property: all sources, price history, JA + EN text
 python -m japan_re mark seen 123 124       # checked it; 'liked' also makes it a favorite, 'passed' hides it from Leads

@@ -113,6 +113,7 @@ class SourceTests(unittest.TestCase):
                                  'https://suumo.jp/chukoikkodate/tokyo/sc_musashino/nc_71234568/'])
         self.assertIn('pn=2', s.next_page(read('suumo_list.html'), url))
         self.assertEqual(s.skipped, {'over ¥150M': 1, 'bus only': 1, 'no photos': 1, 'nearby suggestion': 1})
+        self.assertEqual(s.card_prices[links[0]], 69_800_000)
 
     def test_suumo_detail_record(self):
         s = sources.get('suumo')
@@ -264,6 +265,15 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(v['station_walk_min'], 12)
         self.assertEqual(v['price_per_m2_land'], round(62_000_000 / 285.12))
 
+    def test_bus_ride_is_not_a_walk(self):
+        from japan_re import leads
+        row, st = self._suumo()
+        bus = dict(st[0], station_ja='吉祥寺', station_en='Kichijoji', walk_min=4, bus_min=16,
+                   raw_ja='「吉祥寺」駅 バス16分 「柳沢」バス停 徒歩4分')
+        lid, _ = db.upsert_listing(self.conn, row, [bus])
+        pid = self.conn.execute('SELECT property_id FROM listings WHERE id = ?', (lid,)).fetchone()[0]
+        self.assertEqual(leads._stations(self.conn, pid), {})
+
     def test_removed_after_two_complete_runs_only(self):
         row, st = self._suumo()
         lid, _ = db.upsert_listing(self.conn, row, st)
@@ -345,6 +355,11 @@ class CrawlTests(unittest.TestCase):
             client.requested.clear()
             crawl_source(conn, client, s, musashino, ('detached_house',), log=lambda *_: None)
             self.assertNotIn(a, client.requested)
+            # a changed price on the list card makes it read the listing again
+            conn.execute('UPDATE listings SET price_jpy = 72800000 WHERE url = ?', (a,))
+            client.requested.clear()
+            crawl_source(conn, client, s, musashino, ('detached_house',), log=lambda *_: None)
+            self.assertIn(a, client.requested)
             conn.close()
 
     def test_restricted_source_refused(self):
@@ -424,6 +439,17 @@ class LeadsTests(unittest.TestCase):
         L = self.assess(land_rights='leasehold')
         self.assertEqual(L.indicators['Freehold'], ('🔴', 'leasehold'))
         self.assertLess(L.weight, self.assess().weight)
+
+    def test_new_or_changed_this_week(self):
+        from japan_re import leads
+        self.assertNotIn(leads.NEW_CAT, self.assess().categories)
+        cut = self.assess(recent_change=(48_000_000, 45_000_000, '2026-09-29T19:30:00+00:00'))
+        self.assertEqual(leads.main_category(cut), leads.NEW_CAT)
+        self.assertIn('price cut ¥48.0M → ¥45.0M on 2026-09-29', cut.reason)
+        r = self.row(first_seen='2026-09-29')
+        area, tier, station = leads.locate(r, {'高円寺': 8})
+        new = leads.assess(r, area, tier, {}, '2026-09-28', leads._text(r), station)
+        self.assertEqual(leads.main_category(new), leads.NEW_CAT)
 
     def test_station_name_is_not_machiya(self):
         self.assertNotEqual(n.classify_type('detached_house', '家', '「湘南町屋」駅 徒歩5分')[0], 'machiya')
