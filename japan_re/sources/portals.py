@@ -48,13 +48,22 @@ class Suumo(Source):
         '14204': [('ek_08890', 'Kamakura'), ('ek_11100', 'Kita-Kamakura')],
     }
 
-    def search_targets(self, munis, categories=('detached_house', 'land')):
+    # Apartments (Thomas, 22 Oct 2026: "include apartments but as a separate category"),
+    # kept lean: only the municipalities around the lead areas' main stations, and only
+    # cards a lead could come from (¥70M cap, within a 30-minute walk of those stations).
+    FLAT_MUNIS = {'13114', '13115', '13203', '13204', '14204'}   # Nakano, Suginami, Musashino, Mitaka, Kamakura
+    FLAT_MAX_PRICE = 70_000_000
+    FLAT_STATIONS = ('吉祥寺', '高円寺', '中野', '鎌倉', '三鷹')   # 中野 also matches 東中野/新中野, 鎌倉 北鎌倉
+
+    def search_targets(self, munis, categories=('detached_house', 'land', 'condominium')):
         out = []
         for m in munis:
             places = ([(code, name) for code, name in self.STATION_ONLY[m.code]] if m.code in self.STATION_ONLY
                       else [(f'sc_{self.suumo_slug(m)}', m.name_en)])
             for code, name in places:
                 for cat in categories:
+                    if cat == 'condominium' and m.code not in self.FLAT_MUNIS:
+                        continue
                     out.append(SearchTarget(f'https://suumo.jp/{self.PATHS[cat]}/{PREF_SLUG[m.pref]}/{code}/',
                                             cat, f'{name} / {cat}'))
         return out
@@ -109,6 +118,13 @@ class Suumo(Source):
             return 'over 30 min walk'
         if access and not walks and 'バス' in access:
             return 'bus only'
+        if '/ms/' in href:
+            if price and price > self.FLAT_MAX_PRICE:
+                return 'apartment over ¥70M'
+            near = [int(w) for st, w in re.findall(r'「([^」]+)」[^「]*?徒歩\s*(\d+)\s*分', access)
+                    if any(x in st for x in self.FLAT_STATIONS)]
+            if not near or min(near) > self.MAX_WALK:
+                return 'apartment away from the lead stations'
         photos = [i for i in card.find_all('img') if 'suumo.com' in (i.get('rel') and ' '.join(i.get('rel'))
                                                                       or i.get('src') or '')]
         if not photos:

@@ -427,6 +427,39 @@ class LeadsTests(unittest.TestCase):
         self.assertFalse(flat.is_lead)
         self.assertGreater(house.weight, flat.weight)
 
+    def test_old_flat_is_listed_apart(self):
+        from japan_re import leads
+        flat = self.assess(property_type='condominium', year_built=1974, condition='unknown',
+                           land_area_m2=None, price_per_m2_land=None, price_jpy=32_000_000)
+        self.assertTrue(flat.is_lead)
+        self.assertEqual(leads.main_category(flat), 'Apartments')
+        self.assertNotIn('Renovation Opportunities', flat.categories)    # never mixed into house lists
+        extra = dict(primary_url='https://example.jp/', sources='suumo', title_ja='', first_seen='2026-10-22',
+                     nearest_station=None, station_walk_min=None)
+        house = self.assess()
+        house.row.update(extra); flat.row.update(extra)
+        md = leads.to_markdown([house, flat])
+        self.assertLess(md.index('## Renovation Opportunities'), md.index('## Apartments (1)'))
+        self.assertIn('1 house and land leads', md)
+        dear = self.assess(property_type='condominium', year_built=1974, condition='unknown',
+                           land_area_m2=None, price_per_m2_land=None, price_jpy=60_000_000)
+        self.assertFalse(dear.is_lead)                                 # ¥50-70M needs two signals
+        self.assertEqual(dear.categories, [])
+
+    def test_suumo_apartment_cards_kept_lean(self):
+        from japan_re.sources.portals import Suumo
+        def card(price, access):
+            return (f'<div class="property_unit"><a href="/ms/chuko/tokyo/sc_nakano/nc_1/">x</a>'
+                    f'<img src="https://img01.suumo.com/a.jpg"><dl><dt>販売価格</dt><dd>{price}</dd></dl>'
+                    f'<dl><dt>沿線・駅</dt><dd>{access}</dd></dl></div>')
+        s = Suumo()
+        self.assertEqual(s.detail_links(card('3980万円', 'JR中央線「中野」徒歩8分'), 'https://suumo.jp/'),
+                         ['https://suumo.jp/ms/chuko/tokyo/sc_nakano/nc_1/'])
+        s.detail_links(card('7480万円', 'JR中央線「中野」徒歩8分'), 'https://suumo.jp/')
+        self.assertEqual(s.skipped, {'apartment over ¥70M': 1})
+        s.detail_links(card('3980万円', '西武新宿線「沼袋」徒歩4分'), 'https://suumo.jp/')
+        self.assertEqual(s.skipped, {'apartment away from the lead stations': 1})
+
     def test_above_ideal_budget_needs_more(self):
         plain = self.assess(price_jpy=65_000_000, year_built=2012, condition='unknown', price_per_m2_land=None)
         self.assertFalse(plain.is_lead)
