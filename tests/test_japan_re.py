@@ -510,5 +510,15 @@ class ReviewTests(unittest.TestCase):
             self.assertIsNone(conn.execute('SELECT 1 FROM reviews WHERE property_id = 2').fetchone())
 
 
+
+class UrlTests(unittest.TestCase):
+    def test_raw_and_encoded_links_are_one_listing(self):
+        from japan_re.sources.specialists import Ieichiba
+        src, page = Ieichiba(), 'https://www.ieichiba.com/area/kanagawa'
+        raw = src.detail_links('<a href="/project/P202600636二宮町山西">x</a>', page)
+        enc = src.detail_links('<a href="/project/P202600636%E4%BA%8C%E5%AE%AE%E7%94%BA%E5%B1%B1%E8%A5%BF">x</a>', page)
+        self.assertEqual(raw, enc)
+        self.assertEqual(raw, ['https://www.ieichiba.com/project/P202600636%E4%BA%8C%E5%AE%AE%E7%94%BA%E5%B1%B1%E8%A5%BF'])
+
 if __name__ == '__main__':
     unittest.main()
