@@ -468,6 +468,16 @@ class LeadsTests(unittest.TestCase):
         s.detail_links(card('2480万円', 'JR中央線「中野」徒歩16分'), 'https://suumo.jp/')
         self.assertEqual(s.skipped, {'apartment away from the lead stations': 1})
 
+    def test_suumo_lazy_photo_counts(self):
+        # SUUMO puts the real image URL in rel=; bs4 hands it back as a str, not a list
+        from japan_re.sources.portals import Suumo
+        html = ('<div class="property_unit"><a href="/chukoikkodate/tokyo/sc_nakano/nc_1/">x</a>'
+                '<img src="data:image/gif;base64,R0" rel="https://img01.suumo.com/jj/resizeImage?src=a.jpg">'
+                '<dl><dt>販売価格</dt><dd>4980万円</dd></dl><dl><dt>沿線・駅</dt><dd>JR中央線「中野」徒歩8分</dd></dl></div>')
+        s = Suumo()
+        self.assertEqual(s.detail_links(html, 'https://suumo.jp/'), ['https://suumo.jp/chukoikkodate/tokyo/sc_nakano/nc_1/'])
+        self.assertEqual(s.skipped, {})
+
     def test_above_ideal_budget_needs_more(self):
         plain = self.assess(price_jpy=65_000_000, year_built=2012, condition='unknown', price_per_m2_land=None)
         self.assertFalse(plain.is_lead)

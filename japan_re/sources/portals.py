@@ -127,8 +127,10 @@ class Suumo(Source):
                     if any(x in st for x in self.FLAT_STATIONS)]
             if not near or min(near) > self.FLAT_MAX_WALK:
                 return 'apartment away from the lead stations'
-        photos = [i for i in card.find_all('img') if 'suumo.com' in (i.get('rel') and ' '.join(i.get('rel'))
-                                                                      or i.get('src') or '')]
+        def src(img):   # lazy images keep the URL in rel: a str under bs4, a list under _minisoup
+            rel = img.get('rel') or ''
+            return (rel if isinstance(rel, str) else ' '.join(rel)) or img.get('src') or ''
+        photos = [i for i in card.find_all('img') if 'suumo.com' in src(i)]
         if not photos:
             return 'no photos'
         return None
