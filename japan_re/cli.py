@@ -266,8 +266,9 @@ def cmd_leads(conn, a):
         else:
             out.write_text(leads.to_markdown(found), encoding='utf-8')
         flats = sum(leads.FLAT_CAT in L.categories for L in found)
-        print(f'{sum(L.is_lead for L in found) - flats} leads, {sum(not L.is_lead for L in found)} watchlist, '
-              f'{flats} apartments -> {out}')
+        bldgs = sum(leads.BUILDING_CAT in L.categories for L in found)
+        print(f'{sum(L.is_lead for L in found) - flats - bldgs} leads, {sum(not L.is_lead for L in found)} watchlist, '
+              f'{bldgs} small buildings, {flats} apartments -> {out}')
         return
     for L in found[:a.limit]:
         r = L.row

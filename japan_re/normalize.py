@@ -375,7 +375,8 @@ _TYPE_RULES = [  # (type, keywords) - first match wins, most specific first
     ('traditional_house', ('日本家屋', '純和風', '数寄屋', '数奇屋', '茶室', '和風建築', '古い日本家屋',
                            '伝統構法', '在来和風', '書院造')),
     ('mixed_use', ('店舗付住宅', '店舗併用', '事務所付住宅', '店舗付き住宅', '併用住宅')),
-    ('entire_building', ('一棟', '1棟', '売ビル', '一棟売', 'アパート一棟', 'マンション一棟')),
+    ('entire_building', ('一棟', '1棟売', '1棟アパート', '1棟マンション', '1棟ビル', '売ビル', 'アパート一棟',
+                         'マンション一棟', '共同住宅')),
     ('commercial', ('売店舗', '売事務所', '売倉庫', '売工場', '店舗', '事務所', '倉庫')),
     ('condominium', ('中古マンション', '新築マンション', '区分所有', 'マンション')),
     ('land', ('売地', '土地', '古家付', '古家あり', '上物あり', '建築条件付')),
@@ -384,6 +385,10 @@ _TYPE_RULES = [  # (type, keywords) - first match wins, most specific first
 
 
 _NOT_MACHIYA = re.compile(r'湘南町屋|町屋駅|「町屋」|町屋\s*(?:駅|徒歩|バス)')
+# 全1棟 / 1棟限定 / 限定1棟 / 戸建て1棟 count houses in a development ("only one house"),
+# not a whole building for sale
+_ONE_HOUSE = re.compile(r'全\s*[1一]\s*棟|[1一]\s*棟\s*限定|限定\s*[1一]\s*棟|(?:戸建て?|一戸建て?)\s*[1一]\s*棟|'
+                        r'残り\s*[1一]\s*棟|[1一]\s*棟\s*(?:のみ|現場)')
 
 
 def classify_type(category_hint: str | None, headline: str | None,
@@ -400,7 +405,7 @@ def classify_type(category_hint: str | None, headline: str | None,
     what the condition field records as derelict_rebuild.
     """
     # 町屋 is also a station name (湘南町屋 in Kamakura, 町屋 in Arakawa): not a townhouse
-    head = _NOT_MACHIYA.sub('', nfkc(headline))
+    head = _ONE_HOUSE.sub('', _NOT_MACHIYA.sub('', nfkc(headline)))
     blob = head + ' ' + _NOT_MACHIYA.sub('', nfkc(description))
     for ptype, kws in _TYPE_RULES[:3]:
         for kw in kws:
