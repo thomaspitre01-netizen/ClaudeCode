@@ -17,12 +17,13 @@ from pathlib import Path
 
 from . import leads
 
-HARD_MAX = 150_000_000   # the overall budget cap; nothing above it is worth showing
+HARD_MAX = 150_000_000
+BUILDINGS = ('entire_building', 'mixed_use')   # the Small buildings section: few, so they keep their text   # the overall budget cap; nothing above it is worth showing
 TEMPLATE = Path(__file__).with_name('dashboard.html')
 
 KEYS = ('property_id', 'property_type', 'title_ja', 'title_en', 'municipality', 'municipality_ja',
         'neighborhood_ja', 'address_ja', 'lat', 'lng', 'price_jpy', 'initial_price_jpy', 'land_area_m2',
-        'building_area_m2', 'year_built', 'layout_ja', 'structure', 'condition', 'condition_evidence',
+        'building_area_m2', 'floors_above', 'year_built', 'layout_ja', 'structure', 'condition', 'condition_evidence',
         'land_rights', 'rebuild_prohibited', 'station_walk_min', 'nearest_station', 'price_per_m2_land',
         'est_acquisition_cost_jpy', 'first_seen', 'sources', 'primary_url', 'agency_name')
 
@@ -116,7 +117,8 @@ def build(conn, translations: dict | None = None, photos: dict | None = None) ->
         area, tier, station = leads.locate(r, leads._stations(conn, r['property_id']))
         p = {k: r[k] for k in KEYS}
         p.update(area=area, tier=tier, main_station=station, photos=photos.get(str(r['property_id'])),
-                 **_extras(conn, r['property_id'], translations, str(r['property_id']) in lead_ids))
+                 **_extras(conn, r['property_id'], translations,
+                                 str(r['property_id']) in lead_ids or r['property_type'] in BUILDINGS))
         props.append(_compact(p))
     lead_rows = [_compact({k: v for k, v in x.items() if k not in ('thumbnail_url',)})
                  for x in leads.to_json(found)]
