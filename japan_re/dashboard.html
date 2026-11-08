@@ -216,12 +216,13 @@ const REGIONS = [
   {id:'chuo',name:'Chuo Line',ja:'中央線',areas:['Kichijoji','Mitaka','Koenji','Nakano','Higashi-Nakano','Shin-Nakano'],rail:['Mitaka','Kichijoji','Koenji','Nakano','Higashi-Nakano'],line:'var(--chuo)'},
   {id:'kama',name:'Kamakura',ja:'鎌倉',areas:['Kamakura','Kita-Kamakura'],rail:['Kita-Kamakura','Kamakura'],line:'var(--yoko)'},
 ];
-// Sections. Apartments are leads of their own, kept out of the house and land Leads. Small buildings
-// are every whole building (一棟, 2-4 storeys with their land) in the areas, lead or not.
+// Sections. Apartments and Small buildings (2-4 storey buildings, or 3-4 storey houses, on their
+// own land) are leads of their own, kept out of the house and land Leads.
 const FLAT_CAT = 'Apartments', BLDG_CAT = 'Small Buildings', NEW_CAT = 'New or Changed (last 7 days)';
-const BLDG_TYPES = new Set(['entire_building','mixed_use']);
 const isFlat = l => (l.categories||[]).includes(FLAT_CAT);
-const isBldg = p => BLDG_TYPES.has(p.property_type) || (p.categories||[]).includes(BLDG_CAT);
+const isBldg = l => (l.categories||[]).includes(BLDG_CAT);
+const kindOf = l => isFlat(l)?'flats':isBldg(l)?'bldg':'leads';
+const LEAD_TABS = new Set(['leads','flats','bldg']);
 const TABS = [['leads','Leads'],['flats','Apartments'],['bldg','Small buildings'],['all','All listings']];
 const byId = new Map(D.properties.map(p=>[p.property_id,p]));
 const leadById = new Map(D.leads.map(l=>[l.property_id,l]));
@@ -231,7 +232,7 @@ let S = defaults();
 const store = (k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}, load = k=>{try{return localStorage.getItem(k)}catch(e){return null}};
 {const t=load('jre-tab'); if(TABS.some(x=>x[0]===t)) S.tab=t; if(load('jre-map')==='1') S.map=true;}
 if(location.hash==='#all') S.tab='all';
-if(S.tab==='all'||S.tab==='bldg') S.sort='price';
+if(S.tab==='all') S.sort='price';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -244,10 +245,9 @@ const typeEn = p => (TYPE[p.property_type]||TYPE.other)[0];
 function walkMin(p){ const m=/(\d+) min walk/.exec(p.main_station||(p.lead&&p.lead.main_station)||''); return m?+m[1]:p.station_walk_min; }
 function merged(l){ return Object.assign({}, byId.get(l.property_id)||{}, l); }
 function withLead(p){ return leadById.has(p.property_id)?Object.assign({},p,{lead:leadById.get(p.property_id)}):p; }
-const leadOf = p => S.tab==='leads'||S.tab==='flats' ? p : p.lead;
+const leadOf = p => LEAD_TABS.has(S.tab) ? p : p.lead;
 function base(tab){
-  if(tab==='leads'||tab==='flats') return D.leads.filter(l=>isFlat(l)===(tab==='flats')&&(S.watch||l.is_lead)).map(merged);
-  if(tab==='bldg') return D.properties.filter(isBldg).map(withLead);
+  if(LEAD_TABS.has(tab)) return D.leads.filter(l=>kindOf(l)===tab&&(S.watch||l.is_lead)).map(merged);
   return D.properties.map(withLead);
 }
 function pass(p){
@@ -289,7 +289,7 @@ function setupFilters(){
   const tc=new Set(D.properties.map(p=>p.property_type));
   chipRow($('types'), Object.keys(TYPE).filter(t=>tc.has(t)).map(t=>[t,TYPE[t][0],TYPE[t][1]]), S.types);
   chipRow($('conds'), Object.keys(COND).map(c=>[c,COND[c][0],COND[c][1]]), S.conds);
-  const cats=[...new Set(D.leads.flatMap(l=>l.categories||[]))].filter(c=>c!==FLAT_CAT&&c!=='Watchlist');
+  const cats=[...new Set(D.leads.flatMap(l=>l.categories||[]))].filter(c=>c!==FLAT_CAT&&c!==BLDG_CAT&&c!=='Watchlist');
   chipRow($('cats'), cats.map(c=>[c,c.replace(' Opportunities','').replace(' Properties','').replace(' (last 7 days)','')]), S.cats);
   $('price').innerHTML=[20,30,40,50,60,70,80,100,120,150].map(v=>`<option value="${v}">${v===150?'Any price':'Up to ¥'+v+'M'}</option>`).join('');
   $('walk').innerHTML=[30,25,20,15,10].map(v=>`<option value="${v}">${v===30?'Any walk (≤ 30 min)':'≤ '+v+' min walk'}</option>`).join('');
@@ -307,7 +307,7 @@ $('reset').onclick=()=>{const keep={tab:S.tab,region:S.region,map:S.map,more:S.m
 $('more').onclick=()=>{S.shown+=PAGE;update();};
 $('morebtn').onclick=()=>{S.more=!S.more;update();};
 $('mapbtn').onclick=()=>{S.map=!S.map;store('jre-map',S.map?'1':'0');update();};
-function setTab(t){S.tab=t;S.shown=PAGE;S.cats.clear();S.sort=(t==='leads'||t==='flats')?'weight':(S.sort==='weight'?'price':S.sort);store('jre-tab',t);$('sort').value=S.sort;setupFilters();update();}
+function setTab(t){S.tab=t;S.shown=PAGE;S.cats.clear();S.sort=LEAD_TABS.has(t)?'weight':(S.sort==='weight'?'price':S.sort);store('jre-tab',t);$('sort').value=S.sort;setupFilters();update();}
 $('tabs').onclick=e=>{const b=e.target.closest('button'); if(b) setTab(b.dataset.t);};
 
 // Filters that differ from the defaults, said in words, so it's clear why a list is short.
@@ -444,8 +444,8 @@ $('lb').onkeydown=e=>{if(e.key==='ArrowLeft'){LB.i--;showPhoto();} if(e.key==='A
 
 // ---- new this week: one line, a toggle to show only those
 function drawFresh(){
-  const box=$('fresh'), lead=S.tab==='leads'||S.tab==='flats';
-  const n = lead ? D.leads.filter(l=>l.is_lead&&isFlat(l)===(S.tab==='flats')&&(l.categories||[]).includes(NEW_CAT)).length : 0;
+  const box=$('fresh'), lead=LEAD_TABS.has(S.tab);
+  const n = lead ? D.leads.filter(l=>l.is_lead&&kindOf(l)===S.tab&&(l.categories||[]).includes(NEW_CAT)).length : 0;
   box.hidden = !n; if(!n) return;
   const on = S.cats.size===1&&S.cats.has(NEW_CAT);
   box.innerHTML = `<span><b>${n} new or changed</b> in the last 7 days</span><button id="freshonly">${on?'Show all':'Show only these'}</button>`;
@@ -455,8 +455,8 @@ function drawFresh(){
 function update(){
   const list = rows();
   $('tabs').innerHTML = TABS.map(([t,name])=>`<button role="tab" data-t="${t}" aria-selected="${S.tab===t}">${name}<b>${base(t).filter(pass).length}</b></button>`).join('');
-  $('catwrap').hidden = $('watchwrap').hidden = S.tab==='all'||S.tab==='bldg';
-  $('sort').querySelector('[value=weight]').hidden = S.tab==='all'||S.tab==='bldg';
+  $('catwrap').hidden = $('watchwrap').hidden = S.tab==='all';
+  $('sort').querySelector('[value=weight]').hidden = S.tab==='all';
   $('landv').textContent = S.land?'≥ '+S.land+' m²':'any';
   $('moref').hidden = !S.more; $('morebtn').setAttribute('aria-pressed',S.more);
   const nMore = S.types.size+S.conds.size+S.cats.size+(S.land?1:0)+(S.freehold?1:0)+[...S.areas].filter(a=>SECONDARY.includes(a)).length;
@@ -466,7 +466,7 @@ function update(){
   $('count').textContent = `${list.length.toLocaleString('en')} ${list.length===1?noun.replace(/s$/,'').replace('buildings','building'):noun}`;
   const act = activeFilters(); $('active').textContent = act.length?'· '+act.join(' · '):''; $('reset').hidden = !act.length;
   const empty = S.tab==='flats'&&!D.leads.some(isFlat) ? 'No apartment leads yet. The daily crawl adds them.'
-    : S.tab==='bldg'&&!D.properties.some(isBldg) ? 'No small buildings listed yet. The daily crawl adds them.'
+    : S.tab==='bldg'&&!D.leads.some(isBldg) ? 'No small buildings listed yet. The daily crawl adds them.'
     : 'Nothing matches. Try “Clear filters”.';
   $('cards').innerHTML = list.length ? list.slice(0,S.shown).map(card).join('') : `<div class="empty">${empty}</div>`;
   $('more').hidden = list.length<=S.shown; $('more').textContent = `Show more (${list.length-S.shown} left)`;
