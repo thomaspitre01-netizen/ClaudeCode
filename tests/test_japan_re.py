@@ -446,6 +446,33 @@ class LeadsTests(unittest.TestCase):
         self.assertFalse(dear.is_lead)                                 # apartments: ¥30M at most
         self.assertEqual(dear.categories, [])
 
+    def test_small_buildings_listed_apart(self):
+        from japan_re import leads
+        b = self.assess(property_type='detached_house', floors_above=3, price_jpy=95_000_000,
+                        initial_price_jpy=95_000_000, year_built=2008, condition='unknown')
+        self.assertTrue(b.is_lead)                                       # up to the ¥150M overall cap
+        self.assertEqual(leads.main_category(b), 'Small Buildings')
+        self.assertNotIn('Renovation Opportunities', b.categories)
+        self.assertIn('3-storey house', b.reason)
+        self.assertEqual(b.indicators['Price'][0], leads.RED)
+        shop = self.assess(property_type='mixed_use', floors_above=None)
+        self.assertEqual(leads.main_category(shop), 'Small Buildings')
+        two = self.assess(floors_above=2)                                # ordinary 2-storey house
+        self.assertNotIn('Small Buildings', two.categories)
+        tall = self.assess(property_type='entire_building', floors_above=6)
+        self.assertNotIn('Small Buildings', tall.categories)
+        extra = dict(primary_url='https://example.jp/', sources='suumo', title_ja='', first_seen='2026-11-08',
+                     nearest_station=None, station_walk_min=None)
+        b.row.update(extra)
+        self.assertIn('## Small Buildings (1)', leads.to_markdown([b]))
+
+    def test_one_house_in_a_development_is_not_a_whole_building(self):
+        from japan_re.normalize import classify_type
+        for t in ('西東京市保谷町1丁目 一戸建て 全1棟', '調布市布田2丁目 1棟限定', '世田谷区上用賀4 中古戸建て1棟'):
+            self.assertEqual(classify_type('detached_house', t)[0], 'detached_house', t)
+        self.assertEqual(classify_type(None, '横浜市の店舗・事務所・共同住宅の一棟ビル')[0], 'entire_building')
+        self.assertEqual(classify_type('detached_house', '中野区 1棟アパート')[0], 'entire_building')
+
     def test_flat_walk_limit(self):
         from japan_re import leads
         r = self.row(lat=None, lng=None)

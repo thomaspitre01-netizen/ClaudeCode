@@ -30,6 +30,13 @@ SWEET_MIN = 30_000_000
 WALK_MAX = 30            # hard limit: minutes on foot from one of the main stations below
 FLAT_MAX = 30_000_000    # apartments (Thomas, 22 Oct 2026): no land of their own, so ¥30M at most
 FLAT_WALK_MAX = 15       # and at most a 15-minute walk from the main station
+# Small buildings (Thomas, 8 Nov 2026: "small building 2/3/4 storey building ... with land in
+# the same location, especially Nakano"): whole buildings and shop/rental + home buildings
+# of 2-4 storeys, and 3-4 storey houses, on their own land. Their own section, up to the
+# project's overall ¥150M cap, still within a 30-minute walk of a main station.
+BUILDING_MAX = 150_000_000
+BUILDING_TYPES = ('entire_building', 'mixed_use')
+BUILDING_FLOORS = (2, 4)
 
 # The main station of each area. A property is in an area when the listing gives a walk
 # of WALK_MAX minutes or less to that station, or - when the listing names other stations -
@@ -83,6 +90,15 @@ class Lead:
     @property
     def id(self):
         return self.row['property_id']
+
+
+def is_small_building(r) -> bool:
+    ptype, floors = r['property_type'], r.get('floors_above')
+    if ptype in ('condominium', 'land'):
+        return False
+    if ptype in BUILDING_TYPES:
+        return floors is None or BUILDING_FLOORS[0] <= floors <= BUILDING_FLOORS[1]
+    return floors in (3, 4)
 
 
 # ---------------------------------------------------------------- location
@@ -148,12 +164,15 @@ def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
     ind, sig = L.indicators, L.signals
     price, ptype = r['price_jpy'], r['property_type']
     is_flat = ptype == 'condominium'
+    is_bldg = is_small_building(r)
 
     if price <= IDEAL_MAX:
         ind['Price'] = (GREEN, 'sweet spot ¥30-50M' if price >= SWEET_MIN else 'within target')
         sig.append('price')
-    else:
+    elif price <= HARD_MAX:
         ind['Price'] = (YELLOW, 'above ideal budget (¥50-70M)')
+    else:
+        ind['Price'] = (RED, 'over ¥70M, within the ¥150M overall cap')
 
     land = r['land_area_m2'] or 0
     if is_flat:
@@ -240,14 +259,16 @@ def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
         prev, now, at = r['recent_change']
         extras.append(f'price {"cut" if now < prev else "raised"} ¥{prev / 1e6:,.1f}M → ¥{now / 1e6:,.1f}M on {at[:10]}')
         sig.append('changed')
-    L.reason = _reason(r, area, extras, station)
+    L.reason = _reason(r, area, extras, station, is_bldg)
 
     # ----- is it a lead? hard cap and area are checked by the caller
     # 'core' signals are the ones the brief is about; garden/unusual only break ties
     core = [s for s in set(sig) if s in ('age', 'renovation', 'traditional', 'land_value', 'redevelop',
                                          'price_cut')]
     strong = core + [s for s in set(sig) if s in ('land', 'freehold', 'garden', 'unusual')]
-    if is_flat:
+    if is_bldg:
+        L.is_lead = price <= BUILDING_MAX     # every small building within the limits is listed
+    elif is_flat:
         # apartments are judged among themselves (own section, 22 Oct 2026): the same price
         # limits, and an old or tired flat is the renovation project the brief is about
         # Thomas's own rules for them: ¥30M at most, 15 minutes' walk (checked here and by
@@ -273,6 +294,14 @@ def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
         L.weight -= 10
 
     cats = L.categories
+    if is_bldg:
+        # their own section too (8 Nov 2026), never repeated in the house lists
+        cats.append(BUILDING_CAT)
+        if 'new' in sig or 'changed' in sig:
+            cats.append(NEW_CAT)
+        if 'price_cut' in sig:
+            cats.append('Price Opportunities')
+        return L
     if is_flat:
         # shown in their own section, never mixed into the house and land lists
         if L.is_lead:
@@ -307,8 +336,11 @@ TYPE_EN = {'detached_house': 'House', 'traditional_house': 'Traditional house', 
            'mixed_use': 'Mixed-use building', 'condominium': 'Apartment', 'other': 'Property'}
 
 
-def _reason(r, area, extras, station=None) -> str:
-    bits = [f'¥{r["price_jpy"] / 1e6:,.1f}M {TYPE_EN.get(r["property_type"], "property").lower()}']
+def _reason(r, area, extras, station=None, building=False) -> str:
+    kind = TYPE_EN.get(r['property_type'], 'property').lower()
+    if building and r.get('floors_above'):
+        kind = f'{r["floors_above"]}-storey {kind}'
+    bits = [f'¥{r["price_jpy"] / 1e6:,.1f}M {kind}']
     if r['land_area_m2'] and r['property_type'] != 'condominium':
         bits.append(f'with {r["land_area_m2"]:,.0f} m² of land')
     bits.append(f'in {area}')
@@ -333,11 +365,15 @@ def _reason(r, area, extras, station=None) -> str:
 # this order; the card lists the others as tags.
 NEW_CAT = 'New or Changed (last 7 days)'
 FLAT_CAT = 'Apartments'
+BUILDING_CAT = 'Small Buildings'
 CATEGORY_ORDER = (NEW_CAT, 'Traditional Properties', 'Renovation Opportunities', 'Land Opportunities',
-                  'Price Opportunities', 'Unusual / Hidden Opportunities', 'Other Leads', 'Watchlist', FLAT_CAT)
+                  'Price Opportunities', 'Unusual / Hidden Opportunities', 'Other Leads', 'Watchlist',
+                  BUILDING_CAT, FLAT_CAT)
 
 
 def main_category(L: 'Lead') -> str:
+    if BUILDING_CAT in L.categories:
+        return BUILDING_CAT
     if FLAT_CAT in L.categories:
         return FLAT_CAT
     return next(c for c in CATEGORY_ORDER if c in L.categories)
@@ -348,9 +384,10 @@ def find(conn, areas: list[str] | None = None, include_secondary: bool = True,
     """Every active property under the cap in the chosen areas, assessed. Leads and
     watchlist entries both come back; `is_lead` tells them apart."""
     max_price = min(max_price, HARD_MAX)
+    building_max = BUILDING_MAX if max_price >= HARD_MAX else max_price
     rows = conn.execute(
         f"SELECT * FROM v_properties WHERE status = 'active' AND price_jpy IS NOT NULL AND price_jpy <= ? "
-        f"AND property_type IN ({','.join('?' * len(TYPES))})", (max_price, *TYPES)).fetchall()
+        f"AND property_type IN ({','.join('?' * len(TYPES))})", (building_max, *TYPES)).fetchall()
     medians = land_medians(conn)
     reviews = {x['property_id']: (x['state'], x['note']) for x in conn.execute('SELECT * FROM reviews')}
     first = conn.execute('SELECT MIN(first_seen) FROM listings').fetchone()[0]
@@ -370,6 +407,8 @@ def find(conn, areas: list[str] | None = None, include_secondary: bool = True,
         r = dict(row)
         r['recent_change'] = changes.get(r['property_id'])
         if r['property_type'] == 'condominium' and r['price_jpy'] > FLAT_MAX:
+            continue
+        if r['price_jpy'] > max_price and not is_small_building(r):
             continue
         area, tier, station = locate(r, _stations(conn, r['property_id']),
                                      FLAT_WALK_MAX if r['property_type'] == 'condominium' else WALK_MAX)
@@ -415,6 +454,8 @@ def card(L: Lead) -> list[str]:
         facts.append(f'Building: {r["building_area_m2"]:,.0f} m²')
     if r['year_built']:
         facts.append(f'Built: {r["year_built"]}')
+    if r.get('floors_above') and BUILDING_CAT in L.categories:
+        facts.append(f'Storeys: {r["floors_above"]}')
     if L.station:
         facts.append(f'Station: {L.station}')
     nearest = (r['nearest_station'] or '').split(' / ')[-1]
@@ -437,12 +478,13 @@ def card(L: Lead) -> list[str]:
 
 def to_markdown(found: list[Lead]) -> str:
     flats = [L for L in found if FLAT_CAT in L.categories]
-    leads = [L for L in found if L.is_lead and L not in flats]
+    bldgs = [L for L in found if BUILDING_CAT in L.categories]
+    leads = [L for L in found if L.is_lead and L not in flats and L not in bldgs]
     unchecked = sum(1 for L in leads if not L.review)
     out = [f'# Leads · {dt.date.today():%d %b %Y}', '',
            f'{len(leads)} house and land leads ({unchecked} not checked yet), '
-           f'{len(found) - len(leads) - len(flats)} on the watchlist and {len(flats)} apartments '
-           f'(listed separately at the end). Hard limits: ¥70M and a 30-minute walk from a main station; ¥50M or less '
+           f'{len(found) - len(leads) - len(flats) - len(bldgs)} on the watchlist, {len(bldgs)} small buildings '
+           f'and {len(flats)} apartments (both listed separately at the end). Hard limits: ¥70M and a 30-minute walk from a main station; ¥50M or less '
            'preferred. Ranked by land, ownership, character, age, location and renovation potential. '
            'Indicator order: Price, Land, Age, Renovation, Location, Traditional character, Freehold '
            '(🟢 good · 🟡 so-so · 🔴 against · ⚪ unknown).', '']
@@ -453,6 +495,10 @@ def to_markdown(found: list[Lead]) -> str:
         if not group:
             continue
         out += [f'## {cat} ({len(group)})', '']
+        if cat == BUILDING_CAT:
+            out += ['Small buildings on their own land: whole buildings and shop or rental + home buildings '
+                    'of 2-4 storeys, and 3-4 storey houses. Up to the ¥150M overall cap and at most a '
+                    '30-minute walk from the main station.', '']
         if cat == FLAT_CAT:
             out += ['Apartments (マンション) in the same areas, kept apart because they have no land of '
                     'their own: ¥30M at most and at most a 15-minute walk from the main station.', '']
@@ -465,6 +511,7 @@ def to_markdown(found: list[Lead]) -> str:
 
 def to_json(found: list[Lead]) -> list[dict]:
     keys = ('property_id', 'price_jpy', 'property_type', 'municipality', 'land_area_m2', 'building_area_m2',
+            'floors_above',
             'year_built', 'condition', 'land_rights', 'nearest_station', 'station_walk_min', 'lat', 'lng',
             'primary_url', 'sources', 'first_seen', 'title_ja', 'title_en', 'thumbnail_url')
     return [dict({k: L.row.get(k) for k in keys}, area=L.area, area_tier=L.tier, main_station=L.station,
