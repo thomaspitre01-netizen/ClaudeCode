@@ -63,8 +63,11 @@ class Source:
         return m.group('id') if m and 'id' in m.groupdict() else None
 
     def canonical_url(self, url: str) -> str:
+        # one spelling per page: Ieichiba switched its links from %E4%BA%8C... to raw
+        # Japanese on 26 Oct 2026, which made every listing look new
         p = urllib.parse.urlsplit(url)
-        return urllib.parse.urlunsplit((p.scheme, p.netloc, p.path, p.query, ''))
+        path = urllib.parse.quote(urllib.parse.unquote(p.path), safe="/:@!$&'()*+,;=~")
+        return urllib.parse.urlunsplit((p.scheme, p.netloc, path, p.query, ''))
 
     def extra_pages(self, url: str) -> list[str]:
         """More pages of the same listing worth reading (e.g. a full-spec tab)."""
