@@ -466,6 +466,12 @@ class LeadsTests(unittest.TestCase):
         b.row.update(extra)
         self.assertIn('## Small Buildings (1)', leads.to_markdown([b]))
 
+    def test_machiya_site_name_is_not_a_townhouse(self):
+        from japan_re.normalize import classify_type
+        # 材木座町屋遺跡 is a buried-heritage site in Kamakura, not a townhouse
+        self.assertEqual(classify_type('land', '材木座3(鎌倉駅) 4280万円',
+                                       '※文化財保護法「材木座町屋遺跡」内')[0], 'land')
+
     def test_one_house_in_a_development_is_not_a_whole_building(self):
         from japan_re.normalize import classify_type
         for t in ('西東京市保谷町1丁目 一戸建て 全1棟', '調布市布田2丁目 1棟限定', '世田谷区上用賀4 中古戸建て1棟'):

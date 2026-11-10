@@ -384,7 +384,7 @@ _TYPE_RULES = [  # (type, keywords) - first match wins, most specific first
 ]
 
 
-_NOT_MACHIYA = re.compile(r'湘南町屋|町屋駅|「町屋」|町屋\s*(?:駅|徒歩|バス)')
+_NOT_MACHIYA = re.compile(r'湘南町屋|町屋遺跡|町屋駅|「町屋」|町屋\s*(?:駅|徒歩|バス)')
 # 全1棟 / 1棟限定 / 限定1棟 / 戸建て1棟 count houses in a development ("only one house"),
 # not a whole building for sale
 _ONE_HOUSE = re.compile(r'全\s*[1一]\s*棟|[1一]\s*棟\s*限定|限定\s*[1一]\s*棟|(?:戸建て?|一戸建て?)\s*[1一]\s*棟|'
