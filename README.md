@@ -1,3 +1,11 @@
+# Japan property database
+
+`japan_re/` collects Japanese real-estate listings (Greater Tokyo and Greater Kamakura)
+into a structured SQLite database with Japanese and English text, price history and
+duplicate detection. See [japan_re/README.md](japan_re/README.md).
+
+---
+
 # IFA Contact Database
 
 An Excel contact database and dashboard for the IFA (independent financial adviser) network,
