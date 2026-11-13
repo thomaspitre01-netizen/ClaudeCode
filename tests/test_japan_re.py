@@ -466,6 +466,43 @@ class LeadsTests(unittest.TestCase):
         b.row.update(extra)
         self.assertIn('## Small Buildings (1)', leads.to_markdown([b]))
 
+    def test_kichijoji_commercial(self):
+        from japan_re import leads
+        shop = self.row(title_ja='吉祥寺本町2丁目 売店舗', property_type='detached_house')
+        self.assertTrue(leads.is_commercial(shop))
+        self.assertTrue(leads.is_commercial(self.row(), '1階は店舗として利用中。'))
+        self.assertTrue(leads.is_commercial(self.row(property_type='entire_building', title_ja='1棟ビル')))
+        self.assertFalse(leads.is_commercial(self.row(), '徒歩圏内に店舗多数、商店街も近い'))   # nearby shops
+        self.assertFalse(leads.is_commercial(self.row(property_type='mixed_use', title_ja='賃貸併用住宅')))
+        self.assertFalse(leads.is_commercial(self.row(property_type='condominium', title_ja='店舗付マンション')))
+        r = self.row(lat=None, lng=None)
+        self.assertEqual(leads.locate(r, {'吉祥寺': 30}, 30, only='Kichijoji')[0], 'Kichijoji')
+        self.assertEqual(leads.locate(r, {'高円寺': 5}, 30, only='Kichijoji'), (None, None, None))
+        area, tier, st = leads.locate(r, {'吉祥寺': 12}, 30, only='Kichijoji')
+        shop.update(price_jpy=120_000_000, initial_price_jpy=130_000_000, floors_above=2)
+        L = leads.assess(shop, area, tier, {}, None, leads._text(shop), st, commercial=True)
+        self.assertTrue(L.is_lead)                                       # up to the ¥150M overall cap
+        self.assertEqual(leads.main_category(L), 'Kichijoji Commercial')
+        self.assertNotIn('Small Buildings', L.categories)                # shown once
+        self.assertIn('Price Opportunities', L.categories)
+        L.row.update(primary_url='https://example.jp/', sources='suumo', first_seen='2026-11-13',
+                     nearest_station=None, station_walk_min=None)
+        self.assertIn('## Kichijoji Commercial (1)', leads.to_markdown([L]))
+
+    def test_suumo_kichijoji_page_keeps_only_shops(self):
+        from japan_re.sources.portals import Suumo
+        def card(name):
+            return (f'<div class="property_unit"><a href="/chukoikkodate/tokyo/sc_suginami/nc_1/">x</a>'
+                    f'<img src="https://img01.suumo.com/a.jpg"><dl><dt>物件名</dt><dd>{name}</dd></dl>'
+                    f'<dl><dt>販売価格</dt><dd>9800万円</dd></dl>'
+                    f'<dl><dt>沿線・駅</dt><dd>JR中央線「吉祥寺」徒歩22分</dd></dl></div>')
+        s, page = Suumo(), 'https://suumo.jp/chukoikkodate/tokyo/ek_11640/'
+        self.assertEqual(s.detail_links(card('西荻北4丁目 店舗付住宅'), page),
+                         ['https://suumo.jp/chukoikkodate/tokyo/sc_suginami/nc_1/'])
+        self.assertEqual(s.detail_links(card('西荻北4丁目 戸建て'), page), [])
+        # the municipality pages are not filtered this way
+        self.assertEqual(len(s.detail_links(card('西荻北4丁目 戸建て'), 'https://suumo.jp/chukoikkodate/tokyo/sc_musashino/')), 1)
+
     def test_machiya_site_name_is_not_a_townhouse(self):
         from japan_re.normalize import classify_type
         # 材木座町屋遺跡 is a buried-heritage site in Kamakura, not a townhouse

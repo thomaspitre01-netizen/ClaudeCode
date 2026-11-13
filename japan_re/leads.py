@@ -22,6 +22,8 @@ import datetime as dt
 import statistics
 from dataclasses import dataclass, field
 
+import re
+
 from .normalize import nfkc
 
 HARD_MAX = 70_000_000
@@ -37,6 +39,20 @@ FLAT_WALK_MAX = 15       # and at most a 15-minute walk from the main station
 BUILDING_MAX = 150_000_000
 BUILDING_TYPES = ('entire_building', 'mixed_use')
 BUILDING_FLOORS = (2, 4)
+# Kichijoji commercial (Thomas, 13 Nov 2026: "add commercial property in Kichijoji"): shops,
+# offices and shop/office + home buildings, in their own section. Up to the ¥150M overall
+# cap, at most a 30-minute walk from Kichijoji station, and only listings with photos.
+COMMERCIAL_MAX = 150_000_000
+COMMERCIAL_WALK_MAX = 30
+COMMERCIAL_AREA = 'Kichijoji'
+# shop/office wording in the headline or the listing's own type field
+COMMERCIAL_HEAD = re.compile(r'売店舗|売事務所|店舗付|店舗併用|店舗兼|事務所付|事務所併用|事務所兼|店舗・事務所|'
+                             r'店舗事務所|テナント|[1一]階(?:は)?店舗|店舗用|事務所用|商業ビル|売ビル|'
+                             r'(?:一|1)棟ビル|ビル一棟|店舗物件|事業用|^店舗|^事務所')
+# descriptions mention nearby shops all the time, so only these count there
+COMMERCIAL_DESC = re.compile(r'店舗付(?:き)?住宅|店舗併用住宅|店舗兼(?:用)?住宅|事務所併用住宅|事務所兼(?:用)?住宅|'
+                             r'[1一]階(?:部分)?(?:は|が)?(?:店舗|事務所)(?:として|仕様|利用|使用|です|、|。)|'
+                             r'テナント(?:付|入居中|賃貸中)|オーナーチェンジ.{0,10}店舗')
 
 # The main station of each area. A property is in an area when the listing gives a walk
 # of WALK_MAX minutes or less to that station, or - when the listing names other stations -
@@ -55,7 +71,7 @@ STATIONS = [  # (area, tier, station names as listings write them, (lat, lng))
 M_PER_MIN_STRAIGHT = 80 / 1.3
 
 TYPES = ('detached_house', 'traditional_house', 'kominka', 'machiya', 'land', 'entire_building',
-         'mixed_use', 'condominium', 'other')
+         'mixed_use', 'commercial', 'condominium', 'other')
 TRADITIONAL_TYPES = ('traditional_house', 'kominka', 'machiya')
 TRADITIONAL_WORDS = ('古民家', '日本家屋', '純和風', '数寄屋', '数奇屋', '茶室', '町家', '町屋', '書院',
                      '土間', '縁側', '欄間', '床の間', '囲炉裏', '土蔵', '瓦屋根', '和風建築')
@@ -101,6 +117,26 @@ def is_small_building(r) -> bool:
     return floors in (3, 4)
 
 
+def is_commercial(r, text: str = '') -> bool:
+    """A shop, an office, or a building with one (店舗付住宅, 1階店舗, 売ビル)."""
+    ptype = r['property_type']
+    if ptype == 'commercial':
+        return True
+    if ptype == 'condominium':
+        return False
+    head = nfkc(' '.join(str(r.get(k) or '') for k in ('title_ja', 'property_type_ja')))
+    if COMMERCIAL_HEAD.search(head):
+        return True
+    # a 賃貸併用住宅 (flats to let + home) is mixed-use but not commercial
+    if ptype in ('entire_building', 'mixed_use') and re.search(r'店舗|事務所|ビル', head + ' ' + text):
+        return True
+    return ptype != 'land' and bool(COMMERCIAL_DESC.search(text))
+
+
+def has_photos(r) -> bool:
+    return bool(r.get('thumbnail_url'))
+
+
 # ---------------------------------------------------------------- location
 
 def _stations(conn, property_id) -> dict[str, int]:
@@ -124,11 +160,14 @@ def _km(a, b) -> float:
     return math.hypot(dx, dy)
 
 
-def locate(r, stations: dict[str, int], max_walk: int = WALK_MAX) -> tuple[str | None, str | None, str | None]:
+def locate(r, stations: dict[str, int], max_walk: int = WALK_MAX,
+           only: str | None = None) -> tuple[str | None, str | None, str | None]:
     """(area, tier, 'Kichijoji, 12 min walk') for the best main station within max_walk,
-    primary areas before secondary ones, else (None, None, None)."""
+    primary areas before secondary ones, else (None, None, None). `only` limits it to one area."""
     best = None
     for area, tier, names, coord in STATIONS:
+        if only and area != only:
+            continue
         walk = min((stations[nfkc(n)] for n in names if nfkc(n) in stations), default=None)
         how = 'walk'
         if walk is None and r.get('lat') and r.get('lng'):
@@ -159,12 +198,13 @@ def land_medians(conn) -> dict[str, float]:
     return {m: statistics.median(v) for m, v in per.items() if len(v) >= 5}
 
 
-def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
+def assess(r, area, tier, medians, new_since, text, station=None, commercial=False) -> Lead:
     L = Lead(row=r, area=area, tier=tier, station=station)
     ind, sig = L.indicators, L.signals
     price, ptype = r['price_jpy'], r['property_type']
     is_flat = ptype == 'condominium'
-    is_bldg = is_small_building(r)
+    is_comm = commercial
+    is_bldg = is_small_building(r) and not is_comm
 
     if price <= IDEAL_MAX:
         ind['Price'] = (GREEN, 'sweet spot ¥30-50M' if price >= SWEET_MIN else 'within target')
@@ -259,14 +299,16 @@ def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
         prev, now, at = r['recent_change']
         extras.append(f'price {"cut" if now < prev else "raised"} ¥{prev / 1e6:,.1f}M → ¥{now / 1e6:,.1f}M on {at[:10]}')
         sig.append('changed')
-    L.reason = _reason(r, area, extras, station, is_bldg)
+    L.reason = _reason(r, area, extras, station, is_bldg or is_comm)
 
     # ----- is it a lead? hard cap and area are checked by the caller
     # 'core' signals are the ones the brief is about; garden/unusual only break ties
     core = [s for s in set(sig) if s in ('age', 'renovation', 'traditional', 'land_value', 'redevelop',
                                          'price_cut')]
     strong = core + [s for s in set(sig) if s in ('land', 'freehold', 'garden', 'unusual')]
-    if is_bldg:
+    if is_comm:
+        L.is_lead = price <= COMMERCIAL_MAX   # every commercial listing within the limits is listed
+    elif is_bldg:
         L.is_lead = price <= BUILDING_MAX     # every small building within the limits is listed
     elif is_flat:
         # apartments are judged among themselves (own section, 22 Oct 2026): the same price
@@ -294,6 +336,14 @@ def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
         L.weight -= 10
 
     cats = L.categories
+    if is_comm:
+        # Kichijoji commercial: its own section (13 Nov 2026), shown nowhere else
+        cats.append(COMMERCIAL_CAT)
+        if 'new' in sig or 'changed' in sig:
+            cats.append(NEW_CAT)
+        if 'price_cut' in sig:
+            cats.append('Price Opportunities')
+        return L
     if is_bldg:
         # their own section too (8 Nov 2026), never repeated in the house lists
         cats.append(BUILDING_CAT)
@@ -333,7 +383,8 @@ def assess(r, area, tier, medians, new_since, text, station=None) -> Lead:
 
 TYPE_EN = {'detached_house': 'House', 'traditional_house': 'Traditional house', 'kominka': 'Kominka',
            'machiya': 'Machiya', 'land': 'Land', 'entire_building': 'Entire building',
-           'mixed_use': 'Mixed-use building', 'condominium': 'Apartment', 'other': 'Property'}
+           'mixed_use': 'Mixed-use building', 'commercial': 'Shop / office', 'condominium': 'Apartment',
+           'other': 'Property'}
 
 
 def _reason(r, area, extras, station=None, building=False) -> str:
@@ -366,12 +417,15 @@ def _reason(r, area, extras, station=None, building=False) -> str:
 NEW_CAT = 'New or Changed (last 7 days)'
 FLAT_CAT = 'Apartments'
 BUILDING_CAT = 'Small Buildings'
+COMMERCIAL_CAT = 'Kichijoji Commercial'
 CATEGORY_ORDER = (NEW_CAT, 'Traditional Properties', 'Renovation Opportunities', 'Land Opportunities',
                   'Price Opportunities', 'Unusual / Hidden Opportunities', 'Other Leads', 'Watchlist',
-                  BUILDING_CAT, FLAT_CAT)
+                  BUILDING_CAT, COMMERCIAL_CAT, FLAT_CAT)
 
 
 def main_category(L: 'Lead') -> str:
+    if COMMERCIAL_CAT in L.categories:
+        return COMMERCIAL_CAT
     if BUILDING_CAT in L.categories:
         return BUILDING_CAT
     if FLAT_CAT in L.categories:
@@ -384,7 +438,7 @@ def find(conn, areas: list[str] | None = None, include_secondary: bool = True,
     """Every active property under the cap in the chosen areas, assessed. Leads and
     watchlist entries both come back; `is_lead` tells them apart."""
     max_price = min(max_price, HARD_MAX)
-    building_max = BUILDING_MAX if max_price >= HARD_MAX else max_price
+    building_max = max(BUILDING_MAX, COMMERCIAL_MAX) if max_price >= HARD_MAX else max_price
     rows = conn.execute(
         f"SELECT * FROM v_properties WHERE status = 'active' AND price_jpy IS NOT NULL AND price_jpy <= ? "
         f"AND property_type IN ({','.join('?' * len(TYPES))})", (building_max, *TYPES)).fetchall()
@@ -408,16 +462,29 @@ def find(conn, areas: list[str] | None = None, include_secondary: bool = True,
         r['recent_change'] = changes.get(r['property_id'])
         if r['property_type'] == 'condominium' and r['price_jpy'] > FLAT_MAX:
             continue
-        if r['price_jpy'] > max_price and not is_small_building(r):
-            continue
-        area, tier, station = locate(r, _stations(conn, r['property_id']),
-                                     FLAT_WALK_MAX if r['property_type'] == 'condominium' else WALK_MAX)
-        if not area or (tier == 'secondary' and not include_secondary):
-            continue
+        text = _text(r) + ' ' + _listing_text(conn, r['property_id'])
+        stations = _stations(conn, r['property_id'])
+        # every source's headline and its own type field (種目), not just the primary one
+        r['property_type_ja'] = ' '.join(f'{t or ""} {k or ""}' for t, k in conn.execute(
+            'SELECT title_ja, property_type_ja FROM listings WHERE property_id = ?', (r['property_id'],)))
+        comm = is_commercial(r, text)
+        if comm:
+            # Kichijoji only, within a 30-minute walk of its station, and with photos
+            area, tier, station = locate(r, stations, COMMERCIAL_WALK_MAX, only=COMMERCIAL_AREA)
+            if not area or not has_photos(r) or r['price_jpy'] > COMMERCIAL_MAX:
+                continue
+        else:
+            if r['property_type'] == 'commercial':
+                continue
+            if r['price_jpy'] > max_price and not is_small_building(r):
+                continue
+            area, tier, station = locate(r, stations,
+                                         FLAT_WALK_MAX if r['property_type'] == 'condominium' else WALK_MAX)
+            if not area or (tier == 'secondary' and not include_secondary):
+                continue
         if areas and area not in areas:
             continue
-        text = _text(r) + ' ' + _listing_text(conn, r['property_id'])
-        L = assess(r, area, tier, medians, new_since, text, station)
+        L = assess(r, area, tier, medians, new_since, text, station, commercial=comm)
         rv = reviews.get(r['property_id'])
         if rv:
             L.review, L.review_note = rv
@@ -454,7 +521,7 @@ def card(L: Lead) -> list[str]:
         facts.append(f'Building: {r["building_area_m2"]:,.0f} m²')
     if r['year_built']:
         facts.append(f'Built: {r["year_built"]}')
-    if r.get('floors_above') and BUILDING_CAT in L.categories:
+    if r.get('floors_above') and (BUILDING_CAT in L.categories or COMMERCIAL_CAT in L.categories):
         facts.append(f'Storeys: {r["floors_above"]}')
     if L.station:
         facts.append(f'Station: {L.station}')
@@ -479,12 +546,14 @@ def card(L: Lead) -> list[str]:
 def to_markdown(found: list[Lead]) -> str:
     flats = [L for L in found if FLAT_CAT in L.categories]
     bldgs = [L for L in found if BUILDING_CAT in L.categories]
-    leads = [L for L in found if L.is_lead and L not in flats and L not in bldgs]
+    comms = [L for L in found if COMMERCIAL_CAT in L.categories]
+    leads = [L for L in found if L.is_lead and L not in flats and L not in bldgs and L not in comms]
     unchecked = sum(1 for L in leads if not L.review)
     out = [f'# Leads · {dt.date.today():%d %b %Y}', '',
            f'{len(leads)} house and land leads ({unchecked} not checked yet), '
-           f'{len(found) - len(leads) - len(flats) - len(bldgs)} on the watchlist, {len(bldgs)} small buildings '
-           f'and {len(flats)} apartments (both listed separately at the end). Hard limits: ¥70M and a 30-minute walk from a main station; ¥50M or less '
+           f'{len(found) - len(leads) - len(flats) - len(bldgs) - len(comms)} on the watchlist, '
+           f'{len(bldgs)} small buildings, {len(comms)} Kichijoji commercial properties '
+           f'and {len(flats)} apartments (all three listed separately at the end). Hard limits: ¥70M and a 30-minute walk from a main station; ¥50M or less '
            'preferred. Ranked by land, ownership, character, age, location and renovation potential. '
            'Indicator order: Price, Land, Age, Renovation, Location, Traditional character, Freehold '
            '(🟢 good · 🟡 so-so · 🔴 against · ⚪ unknown).', '']
@@ -499,6 +568,9 @@ def to_markdown(found: list[Lead]) -> str:
             out += ['Small buildings on their own land: whole buildings and shop or rental + home buildings '
                     'of 2-4 storeys, and 3-4 storey houses. Up to the ¥150M overall cap and at most a '
                     '30-minute walk from the main station.', '']
+        if cat == COMMERCIAL_CAT:
+            out += ['Shops, offices and shop or office + home buildings around Kichijoji: up to the ¥150M '
+                    'overall cap, at most a 30-minute walk from Kichijoji station, with photos.', '']
         if cat == FLAT_CAT:
             out += ['Apartments (マンション) in the same areas, kept apart because they have no land of '
                     'their own: ¥30M at most and at most a 15-minute walk from the main station.', '']

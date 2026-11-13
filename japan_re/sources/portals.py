@@ -68,7 +68,20 @@ class Suumo(Source):
                         continue
                     out.append(SearchTarget(f'https://suumo.jp/{self.PATHS[cat]}/{PREF_SLUG[m.pref]}/{code}/',
                                             cat, f'{name} / {cat}'))
+        if any(m.code == '13203' for m in munis):
+            # Kichijoji commercial (Thomas, 13 Nov 2026): the Kichijoji station pages reach the
+            # Suginami and Nerima streets within a 30-minute walk that the municipality pages
+            # above leave out; from them only shop and office cards are kept (see skip_reason)
+            for cat in ('detached_house', 'land'):
+                out.append(SearchTarget(f'https://suumo.jp/{self.PATHS[cat]}/tokyo/{self.KICHIJOJI}/',
+                                        cat, f'Kichijoji station (commercial) / {cat}'))
         return out
+
+    KICHIJOJI = 'ek_11640'
+    # shop / office wording on a card's name or a listing's headline
+    COMMERCIAL_RE = re.compile(r'売店舗|売事務所|店舗付|店舗併用|店舗兼|事務所付|事務所併用|事務所兼|店舗・事務所|'
+                               r'店舗事務所|テナント|[1一]階(?:は)?店舗|店舗用|事務所用|商業ビル|売ビル|'
+                               r'(?:一|1)棟ビル|ビル一棟|店舗物件|事業用')
 
     # Skip before fetching (Thomas, 27 Sep 2026): over the ¥150M hard cap, more than a
     # 30-minute walk from any station (or bus only), no photos, or SUUMO's "nearby"
@@ -79,6 +92,7 @@ class Suumo(Source):
     def detail_links(self, html, page_url):
         soup = BeautifulSoup(html, 'html.parser')
         keep, self.skipped, self.card_prices = [], {}, {}
+        self._page_url = page_url
         cards = soup.find_all('div', class_='property_unit')
         if not cards:                      # page layout changed: fall back to every link
             return super().detail_links(html, page_url)
@@ -111,6 +125,8 @@ class Suumo(Source):
         if 'fmlg=' in href:
             return 'nearby suggestion'
         fields = self._card_fields(card)
+        if self.KICHIJOJI in (self._page_url or '') and not self.COMMERCIAL_RE.search(fields.get('物件名') or ''):
+            return 'Kichijoji page: not a shop or office'
         price = self._card_price(card)
         if price and price > self.MAX_PRICE:
             return 'over ¥150M'

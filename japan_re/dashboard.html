@@ -206,7 +206,7 @@ dialog.lb .cap{position:fixed;bottom:14px;left:0;right:0;text-align:center;color
 <dialog class="lb" id="lb" aria-label="Photo"><div class="in"><img id="lbimg" alt=""></div><button class="x" id="lbx" aria-label="Close">×</button><button class="pv" id="lbp" aria-label="Previous photo">‹</button><button class="nx" id="lbn" aria-label="Next photo">›</button><div class="cap" id="lbcap"></div></dialog>
 <script>
 const D = /*__DATA__*/null;
-const TYPE = {detached_house:['House','一戸建て'],traditional_house:['Traditional house','日本家屋'],kominka:['Kominka','古民家'],machiya:['Machiya','町家'],land:['Land','土地'],entire_building:['Whole building','一棟'],mixed_use:['Shop + home','店舗付住宅'],condominium:['Apartment','マンション'],other:['Other','その他']};
+const TYPE = {detached_house:['House','一戸建て'],traditional_house:['Traditional house','日本家屋'],kominka:['Kominka','古民家'],machiya:['Machiya','町家'],land:['Land','土地'],entire_building:['Whole building','一棟'],mixed_use:['Shop + home','店舗付住宅'],commercial:['Shop / office','店舗・事務所'],condominium:['Apartment','マンション'],other:['Other','その他']};
 const COND = {move_in_ready:['Move-in ready','即入居可'],minor_renovation:['Light refresh','軽微な改修'],major_renovation:['Major renovation','大規模改修'],full_renovation:['Full renovation','全面改修'],derelict_rebuild:['Rebuild / land value','建替え前提'],unknown:['Unknown','不明']};
 const SRC = {suumo:'SUUMO',real_kamakura:'Real Kamakura',real_tokyo:'Real Tokyo',ieichiba:'Ieichiba'};
 const AREA_JA = Object.fromEntries(D.stations.map(s=>[s.area,s.ja]));
@@ -218,12 +218,14 @@ const REGIONS = [
 ];
 // Sections. Apartments and Small buildings (2-4 storey buildings, or 3-4 storey houses, on their
 // own land) are leads of their own, kept out of the house and land Leads.
-const FLAT_CAT = 'Apartments', BLDG_CAT = 'Small Buildings', NEW_CAT = 'New or Changed (last 7 days)';
+// Commercial: shops and offices within a 30-min walk of Kichijoji station, up to ¥150M.
+const FLAT_CAT = 'Apartments', BLDG_CAT = 'Small Buildings', COMM_CAT = 'Kichijoji Commercial', NEW_CAT = 'New or Changed (last 7 days)';
 const isFlat = l => (l.categories||[]).includes(FLAT_CAT);
 const isBldg = l => (l.categories||[]).includes(BLDG_CAT);
-const kindOf = l => isFlat(l)?'flats':isBldg(l)?'bldg':'leads';
-const LEAD_TABS = new Set(['leads','flats','bldg']);
-const TABS = [['leads','Leads'],['flats','Apartments'],['bldg','Small buildings'],['all','All listings']];
+const isComm = l => (l.categories||[]).includes(COMM_CAT);
+const kindOf = l => isComm(l)?'comm':isFlat(l)?'flats':isBldg(l)?'bldg':'leads';
+const LEAD_TABS = new Set(['leads','flats','bldg','comm']);
+const TABS = [['leads','Leads'],['flats','Apartments'],['bldg','Small buildings'],['comm','Commercial'],['all','All listings']];
 const byId = new Map(D.properties.map(p=>[p.property_id,p]));
 const leadById = new Map(D.leads.map(l=>[l.property_id,l]));
 const PAGE = 24;
@@ -462,11 +464,12 @@ function update(){
   const nMore = S.types.size+S.conds.size+S.cats.size+(S.land?1:0)+(S.freehold?1:0)+[...S.areas].filter(a=>SECONDARY.includes(a)).length;
   $('morebtn').innerHTML = 'More filters'+(nMore?`<span class="n">${nMore}</span>`:'');
   $('mapbox').hidden = !S.map; $('mapbtn').setAttribute('aria-pressed',S.map); $('mapbtn').textContent = S.map?'Hide map':'Map';
-  const noun = {leads:'leads',flats:'apartment leads',bldg:'small buildings',all:'listings'}[S.tab];
+  const noun = {leads:'leads',flats:'apartment leads',bldg:'small buildings',comm:'commercial listings',all:'listings'}[S.tab];
   $('count').textContent = `${list.length.toLocaleString('en')} ${list.length===1?noun.replace(/s$/,'').replace('buildings','building'):noun}`;
   const act = activeFilters(); $('active').textContent = act.length?'· '+act.join(' · '):''; $('reset').hidden = !act.length;
   const empty = S.tab==='flats'&&!D.leads.some(isFlat) ? 'No apartment leads yet. The daily crawl adds them.'
     : S.tab==='bldg'&&!D.leads.some(isBldg) ? 'No small buildings listed yet. The daily crawl adds them.'
+    : S.tab==='comm'&&!D.leads.some(isComm) ? 'No shops or offices for sale within a 30-minute walk of Kichijoji right now. The daily crawl checks again.'
     : 'Nothing matches. Try “Clear filters”.';
   $('cards').innerHTML = list.length ? list.slice(0,S.shown).map(card).join('') : `<div class="empty">${empty}</div>`;
   $('more').hidden = list.length<=S.shown; $('more').textContent = `Show more (${list.length-S.shown} left)`;
